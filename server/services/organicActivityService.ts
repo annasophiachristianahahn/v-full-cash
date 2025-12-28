@@ -23,6 +23,53 @@ const getFutureDateString = (daysFromNow: number): string => {
   return date.toISOString().split('T')[0];
 };
 
+/**
+ * Calculate sleep period for today based on last scheduled run time
+ * Sleep starts 0-2 hours after last scheduled run, lasts 6-8 hours
+ */
+const calculateSleepPeriod = async (): Promise<{ sleepStart: Date; sleepEnd: Date }> => {
+  const storage = await getStorage();
+  const scheduledRuns = await storage.getAllScheduledRuns();
+
+  // Find latest scheduled run time of day
+  let latestRunMinutes = 0; // Minutes since midnight
+
+  for (const run of scheduledRuns.filter(r => r.enabled)) {
+    const [hours, minutes] = run.timeOfDay.split(':').map(Number);
+    const runMinutes = hours * 60 + minutes;
+    if (runMinutes > latestRunMinutes) {
+      latestRunMinutes = runMinutes;
+    }
+  }
+
+  // If no scheduled runs, default to 10 PM (22:00)
+  if (latestRunMinutes === 0) {
+    latestRunMinutes = 22 * 60; // 10 PM
+  }
+
+  // Sleep starts 0-120 minutes after last scheduled run
+  const sleepStartOffset = randomInt(0, 120); // 0-2 hours in minutes
+  const sleepDuration = randomInt(360, 480); // 6-8 hours in minutes
+
+  const now = new Date();
+  const sleepStartMinutes = latestRunMinutes + sleepStartOffset;
+
+  // Create sleep start time for today
+  const sleepStart = new Date(now);
+  sleepStart.setHours(Math.floor(sleepStartMinutes / 60), sleepStartMinutes % 60, 0, 0);
+
+  // If sleep start is in the past, move it to tomorrow
+  if (sleepStart < now) {
+    sleepStart.setDate(sleepStart.getDate() + 1);
+  }
+
+  // Calculate sleep end time
+  const sleepEnd = new Date(sleepStart);
+  sleepEnd.setMinutes(sleepEnd.getMinutes() + sleepDuration);
+
+  return { sleepStart, sleepEnd };
+};
+
 class OrganicActivityService {
   private checkInterval: NodeJS.Timeout | null = null;
   private isProcessing: boolean = false;
@@ -50,37 +97,53 @@ class OrganicActivityService {
     const storage = await getStorage();
     const allSettings = await storage.getAllTwitterSettings();
     const today = getTodayDateString();
-    
+
     for (const settings of allSettings) {
       if (!settings.twitterCookie) continue;
-      
+
       let schedule = await storage.getOrganicActivitySchedule(settings.username);
-      
+
       if (!schedule) {
         const dailyLikesTarget = randomInt(3, 15);
         const nextRetweetDate = getFutureDateString(randomInt(2, 4));
-        
+        const { sleepStart, sleepEnd } = await calculateSleepPeriod();
+
         schedule = await storage.createOrganicActivitySchedule({
           username: settings.username,
           dailyLikesTarget,
           likesCompletedToday: 0,
           lastLikeDate: today,
-          nextLikeTime: getRandomFutureTime(45, 240), // 45-240 minutes as per requirements
+          nextLikeTime: getRandomFutureTime(45, 240),
           lastRetweetDate: null,
-          nextRetweetDate
+          nextRetweetDate,
+          sleepStartTime: sleepStart,
+          sleepEndTime: sleepEnd,
+          lastSleepCalculation: today
         });
-        
-        log(`Created organic schedule for @${settings.username}: ${dailyLikesTarget} likes/day, next retweet ${nextRetweetDate}`);
+
+        log(`Created organic schedule for @${settings.username}: ${dailyLikesTarget} likes/day, next retweet ${nextRetweetDate}, sleep ${sleepStart.toLocaleTimeString()}-${sleepEnd.toLocaleTimeString()}`);
       } else {
+        // Reset daily likes if new day
         if (schedule.lastLikeDate !== today) {
           const newDailyTarget = randomInt(3, 15);
           await storage.updateOrganicActivitySchedule(settings.username, {
             dailyLikesTarget: newDailyTarget,
             likesCompletedToday: 0,
             lastLikeDate: today,
-            nextLikeTime: getRandomFutureTime(45, 240) // 45-240 minutes as per requirements
+            nextLikeTime: getRandomFutureTime(45, 240)
           });
           log(`Reset daily likes for @${settings.username}: new target ${newDailyTarget}`);
+        }
+
+        // Recalculate sleep period if new day
+        if (schedule.lastSleepCalculation !== today) {
+          const { sleepStart, sleepEnd } = await calculateSleepPeriod();
+          await storage.updateOrganicActivitySchedule(settings.username, {
+            sleepStartTime: sleepStart,
+            sleepEndTime: sleepEnd,
+            lastSleepCalculation: today
+          });
+          log(`Recalculated sleep period for @${settings.username}: ${sleepStart.toLocaleTimeString()}-${sleepEnd.toLocaleTimeString()}`);
         }
       }
     }
@@ -100,22 +163,35 @@ class OrganicActivityService {
 
   private async checkAndExecute(): Promise<void> {
     if (this.isProcessing) return;
-    
+
     this.isProcessing = true;
-    
+
     try {
       const storage = await getStorage();
       const schedules = await storage.getAllOrganicActivitySchedules();
       const now = new Date();
       const today = getTodayDateString();
-      
+
       for (const schedule of schedules) {
+        // Check if account is in sleep period
+        if (schedule.sleepStartTime && schedule.sleepEndTime) {
+          const sleepStart = new Date(schedule.sleepStartTime);
+          const sleepEnd = new Date(schedule.sleepEndTime);
+
+          if (now >= sleepStart && now <= sleepEnd) {
+            log(`😴 @${schedule.username} is sleeping (${sleepStart.toLocaleTimeString()}-${sleepEnd.toLocaleTimeString()}), skipping organic activity`);
+            continue; // Skip all activities during sleep
+          }
+        }
+
+        // Execute likes if scheduled and not at daily limit
         if (schedule.nextLikeTime && new Date(schedule.nextLikeTime) <= now) {
           if (schedule.likesCompletedToday < schedule.dailyLikesTarget) {
             await this.executeLike(schedule.username);
           }
         }
-        
+
+        // Execute retweets if scheduled
         if (schedule.nextRetweetDate && schedule.nextRetweetDate <= today) {
           await this.executeRetweet(schedule.username);
         }

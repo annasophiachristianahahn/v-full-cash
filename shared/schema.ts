@@ -222,6 +222,9 @@ export const organicActivitySchedule = pgTable("organic_activity_schedule", {
   nextLikeTime: timestamp("next_like_time"), // When to do next like
   lastRetweetDate: text("last_retweet_date"), // YYYY-MM-DD when last retweet was done
   nextRetweetDate: text("next_retweet_date"), // YYYY-MM-DD when next retweet should happen (every 3 days)
+  sleepStartTime: timestamp("sleep_start_time"), // When daily sleep period starts
+  sleepEndTime: timestamp("sleep_end_time"), // When daily sleep period ends
+  lastSleepCalculation: text("last_sleep_calculation"), // YYYY-MM-DD when sleep times were last calculated
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
