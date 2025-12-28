@@ -438,16 +438,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jobManager.off('job:completed', onJobCompleted);
       };
       
+      // RAID CROSS-LIKING: Set up listener for raid job completions
+      const onRaidCompleted = async (completedJob: any) => {
+        // Only handle raid reply jobs from this run
+        if (!raidJobIds.includes(completedJob.id) || completedJob.type !== 'reply') return;
+
+        const replyUrl = completedJob.result?.replyUrl;
+        if (!replyUrl) return;
+
+        console.log(`[SingleAutoRun] Raid completed by @${completedJob.data.username}: ${replyUrl}`);
+
+        // 60% chance to like each previous raid reply
+        if (completedRaidUrls.length > 0) {
+          console.log(`[SingleAutoRun] @${completedJob.data.username} checking ${completedRaidUrls.length} previous raids for cross-likes (60% chance each)`);
+
+          for (const previousRaidUrl of completedRaidUrls) {
+            if (Math.random() < 0.6) { // 60% chance
+              const likeDelay = Math.floor(Math.random() * 10) + 5; // 5-15 seconds
+              await replyQueue.queueLike({
+                tweetUrl: previousRaidUrl,
+                username: completedJob.data.username,
+                delaySeconds: likeDelay
+              });
+              console.log(`[SingleAutoRun] ❤️ Queued cross-like: @${completedJob.data.username} will like previous raid in ${likeDelay}s`);
+            }
+          }
+        }
+
+        // Add this raid's URL to the list for future raids to potentially like
+        completedRaidUrls.push(replyUrl);
+      };
+
       // Register listener BEFORE creating job to avoid race condition
       if (raidAccountsToUse.length > 0) {
         jobManager.on('job:completed', onJobCompleted);
-        console.log(`[SingleAutoRun] Event listener registered for job:completed (BEFORE job creation)`);
-        
-        // Cleanup listener after timeout (5 minutes) in case primary fails
+        jobManager.on('job:completed', onRaidCompleted); // Add raid cross-like listener
+        console.log(`[SingleAutoRun] Event listeners registered for job:completed (BEFORE job creation)`);
+
+        // Cleanup listeners after timeout (10 minutes) to allow all raids to complete
         setTimeout(() => {
           jobManager.off('job:completed', onJobCompleted);
-          console.log(`[SingleAutoRun] Event listener cleanup (5min timeout)`);
-        }, 5 * 60 * 1000);
+          jobManager.off('job:completed', onRaidCompleted);
+          console.log(`[SingleAutoRun] Event listeners cleanup (10min timeout)`);
+        }, 10 * 60 * 1000);
       }
       
       // STEP 3: NOW queue primary reply (after listener is registered)
