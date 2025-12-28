@@ -130,7 +130,7 @@ class OrganicActivityService {
   private async executeLike(username: string): Promise<void> {
     const storage = await getStorage();
     const settings = await storage.getTwitterSettingsByUsername(username);
-    
+
     if (!settings?.twitterCookie) {
       log(`No cookie for @${username}, skipping like`, 'WARN');
       return;
@@ -139,19 +139,52 @@ class OrganicActivityService {
     log(`🔄 Executing organic like for @${username}`);
 
     try {
-      const tweetsResult = await twitterAutomation.getRecentTweetFromFollowing({
-        twitterCookie: settings.twitterCookie,
-        username
-      });
+      // Check if we need to refresh following cache (monthly)
+      const shouldRefresh = await storage.shouldRefreshFollowingCache(username);
+      if (shouldRefresh) {
+        log(`Refreshing following cache for @${username}...`);
+        const followingResult = await twitterAutomation.getFollowing({
+          twitterCookie: settings.twitterCookie,
+          username
+        });
 
-      if (!tweetsResult.success || tweetsResult.tweets.length === 0) {
-        log(`No tweets found for @${username} to like`, 'WARN');
+        if (followingResult.success && followingResult.following) {
+          await storage.refreshFollowingCache(username, followingResult.following);
+          log(`✅ Cached ${followingResult.following.length} following accounts for @${username}`);
+        } else {
+          log(`❌ Failed to get following list for @${username}: ${followingResult.error}`, 'ERROR');
+          await this.scheduleNextLike(username);
+          return;
+        }
+      }
+
+      // Get random account from following cache
+      const randomFollowing = await storage.getRandomFollowingUser(username);
+      if (!randomFollowing) {
+        log(`No following accounts in cache for @${username}`, 'WARN');
         await this.scheduleNextLike(username);
         return;
       }
 
+      log(`@${username} selected @${randomFollowing.followingUsername} from following list`);
+
+      // Search for recent tweets from this user
+      const tweetsResult = await twitterAutomation.searchTweetsByUser({
+        twitterCookie: settings.twitterCookie,
+        username,
+        targetUsername: randomFollowing.followingUsername,
+        maxItems: 5
+      });
+
+      if (!tweetsResult.success || !tweetsResult.tweets || tweetsResult.tweets.length === 0) {
+        log(`No tweets found from @${randomFollowing.followingUsername}`, 'WARN');
+        await this.scheduleNextLike(username);
+        return;
+      }
+
+      // Select random tweet from results
       const randomTweet = tweetsResult.tweets[randomInt(0, tweetsResult.tweets.length - 1)];
-      
+
       const likeResult = await twitterAutomation.likeTweet({
         tweetUrl: randomTweet.tweetUrl,
         twitterCookie: settings.twitterCookie,
@@ -174,7 +207,7 @@ class OrganicActivityService {
           });
         }
 
-        log(`✅ @${username} liked tweet from @${randomTweet.authorHandle} (${schedule?.likesCompletedToday || 0 + 1}/${schedule?.dailyLikesTarget || '?'})`);
+        log(`✅ @${username} liked tweet from @${randomTweet.authorHandle} (${(schedule?.likesCompletedToday || 0) + 1}/${schedule?.dailyLikesTarget || '?'})`);
       } else {
         log(`❌ Failed to like for @${username}: ${likeResult.error}`, 'ERROR');
         await this.scheduleNextLike(username);
@@ -195,7 +228,7 @@ class OrganicActivityService {
   private async executeRetweet(username: string): Promise<void> {
     const storage = await getStorage();
     const settings = await storage.getTwitterSettingsByUsername(username);
-    
+
     if (!settings?.twitterCookie) {
       log(`No cookie for @${username}, skipping retweet`, 'WARN');
       return;
@@ -204,19 +237,54 @@ class OrganicActivityService {
     log(`🔄 Executing organic retweet for @${username}`);
 
     try {
-      const tweetsResult = await twitterAutomation.getRecentTweetFromFollowing({
-        twitterCookie: settings.twitterCookie,
-        username
-      });
+      // Check if we need to refresh following cache (monthly)
+      const shouldRefresh = await storage.shouldRefreshFollowingCache(username);
+      if (shouldRefresh) {
+        log(`Refreshing following cache for @${username}...`);
+        const followingResult = await twitterAutomation.getFollowing({
+          twitterCookie: settings.twitterCookie,
+          username
+        });
 
-      if (!tweetsResult.success || tweetsResult.tweets.length === 0) {
-        log(`No tweets found for @${username} to retweet`, 'WARN');
+        if (followingResult.success && followingResult.following) {
+          await storage.refreshFollowingCache(username, followingResult.following);
+          log(`✅ Cached ${followingResult.following.length} following accounts for @${username}`);
+        } else {
+          log(`❌ Failed to get following list for @${username}: ${followingResult.error}`, 'ERROR');
+          await this.scheduleNextRetweet(username);
+          return;
+        }
+      }
+
+      // Get random account from following cache
+      const randomFollowing = await storage.getRandomFollowingUser(username);
+      if (!randomFollowing) {
+        log(`No following accounts in cache for @${username}`, 'WARN');
         await this.scheduleNextRetweet(username);
         return;
       }
 
+      log(`@${username} selected @${randomFollowing.followingUsername} from following list for retweet`);
+
+      // Search for recent tweets from this user
+      const tweetsResult = await twitterAutomation.searchTweetsByUser({
+        twitterCookie: settings.twitterCookie,
+        username,
+        targetUsername: randomFollowing.followingUsername,
+        maxItems: 5
+      });
+
+      if (!tweetsResult.success || !tweetsResult.tweets || tweetsResult.tweets.length === 0) {
+        log(`No tweets found from @${randomFollowing.followingUsername}`, 'WARN');
+        await this.scheduleNextRetweet(username);
+        return;
+      }
+
+      // Select random tweet from results
       const randomTweet = tweetsResult.tweets[randomInt(0, tweetsResult.tweets.length - 1)];
-      
+
+      // ALWAYS like before retweeting
+      log(`@${username} liking tweet before retweet...`);
       const likeResult = await twitterAutomation.likeTweet({
         tweetUrl: randomTweet.tweetUrl,
         twitterCookie: settings.twitterCookie,
@@ -230,9 +298,15 @@ class OrganicActivityService {
           targetTweetUrl: randomTweet.tweetUrl,
           targetUsername: randomTweet.authorHandle
         });
+        log(`✅ @${username} liked tweet from @${randomTweet.authorHandle}`);
+      } else {
+        log(`⚠️ Like failed but continuing with retweet: ${likeResult.error}`, 'WARN');
       }
 
-      await new Promise(resolve => setTimeout(resolve, randomInt(2000, 5000)));
+      // Wait 6-11 seconds before retweet (respect TwexAPI rate limit)
+      const delayMs = randomInt(6000, 11000);
+      log(`⏳ Waiting ${(delayMs / 1000).toFixed(1)}s before retweet (TwexAPI rate limit: 5s)`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
 
       const retweetResult = await twitterAutomation.retweet({
         tweetUrl: randomTweet.tweetUrl,

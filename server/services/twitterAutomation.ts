@@ -168,17 +168,73 @@ export class TwitterAutomationService {
   }
 
   /**
-   * Get recent tweets from user's timeline (organic activity)
-   * Note: This functionality is not available in TwexAPI
-   * Returning empty array to maintain compatibility
+   * Get list of accounts the user follows
    */
-  async getRecentTweetsFromFollowing(params: {
+  async getFollowing(params: {
     twitterCookie: string;
     username: string;
     limit?: number;
-  }): Promise<Array<{ url: string; authorHandle: string; text: string }>> {
-    log(`[WARN] getRecentTweetsFromFollowing not supported in TwexAPI - returning empty array`);
-    return [];
+  }): Promise<{ success: boolean; following?: Array<{ userId: string; username: string; name: string }>; error?: string }> {
+    log(`Getting following list for @${params.username}`);
+
+    const result = await twexApiService.getFollowing({
+      twitterCookie: params.twitterCookie,
+      username: params.username,
+      limit: params.limit
+    });
+
+    return result;
+  }
+
+  /**
+   * Search for tweets from a specific user
+   */
+  async searchTweetsByUser(params: {
+    twitterCookie: string;
+    username: string;
+    targetUsername: string;
+    maxItems?: number;
+  }): Promise<{ success: boolean; tweets?: Array<{ tweetId: string; tweetUrl: string; text: string; authorHandle: string }>; error?: string }> {
+    log(`Searching tweets from @${params.targetUsername}`);
+
+    const result = await twexApiService.advancedSearch({
+      searchTerms: [`from:${params.targetUsername}`],
+      username: params.username,
+      twitterCookie: params.twitterCookie,
+      maxItems: params.maxItems || 5,
+      sortBy: 'Latest'
+    });
+
+    return result;
+  }
+
+  /**
+   * Retweet a tweet
+   */
+  async retweet(params: {
+    tweetUrl: string;
+    twitterCookie: string;
+    username: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    // Extract tweet ID from URL
+    const match = params.tweetUrl.match(/status\/(\d+)/);
+    if (!match) {
+      return {
+        success: false,
+        error: 'Could not extract tweet ID from URL'
+      };
+    }
+
+    const tweetId = match[1];
+    log(`Retweeting tweet ${tweetId} from @${params.username}`);
+
+    const result = await twexApiService.retweet({
+      tweetId,
+      username: params.username,
+      twitterCookie: params.twitterCookie
+    });
+
+    return result;
   }
 }
 

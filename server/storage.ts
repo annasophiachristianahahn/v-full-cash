@@ -1,4 +1,4 @@
-import { type TweetSearch, type InsertTweetSearch, type Tweet, type InsertTweet, type RecommendedCashtag, type InsertRecommendedCashtag, type PinnedTrendingToken, type InsertPinnedTrendingToken, type TwitterSettings, type InsertTwitterSettings, type AiConfig, type InsertAiConfig, type ReplyImage, type InsertReplyImage, type FilteredHandles, type InsertFilteredHandles, type ScheduledRun, type InsertScheduledRun, type OrganicActivity, type InsertOrganicActivity, type OrganicActivitySchedule, type InsertOrganicActivitySchedule, tweetSearches, tweets, recommendedCashtags, pinnedTrendingTokens, twitterSettings, aiConfig, replyImages, filteredHandles, scheduledRuns, organicActivity, organicActivitySchedule } from "@shared/schema";
+import { type TweetSearch, type InsertTweetSearch, type Tweet, type InsertTweet, type RecommendedCashtag, type InsertRecommendedCashtag, type PinnedTrendingToken, type InsertPinnedTrendingToken, type TwitterSettings, type InsertTwitterSettings, type AiConfig, type InsertAiConfig, type ReplyImage, type InsertReplyImage, type FilteredHandles, type InsertFilteredHandles, type ScheduledRun, type InsertScheduledRun, type OrganicActivity, type InsertOrganicActivity, type OrganicActivitySchedule, type InsertOrganicActivitySchedule, type FollowingCache, type InsertFollowingCache, tweetSearches, tweets, recommendedCashtags, pinnedTrendingTokens, twitterSettings, aiConfig, replyImages, filteredHandles, scheduledRuns, organicActivity, organicActivitySchedule, followingCache } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { eq, sql } from "drizzle-orm";
 
@@ -74,6 +74,12 @@ export interface IStorage {
   createOrganicActivitySchedule(schedule: InsertOrganicActivitySchedule): Promise<OrganicActivitySchedule>;
   updateOrganicActivitySchedule(username: string, updates: Partial<InsertOrganicActivitySchedule>): Promise<void>;
   resetDailyLikesForAllAccounts(): Promise<void>;
+
+  // Following cache
+  getFollowingCache(username: string): Promise<FollowingCache[]>;
+  shouldRefreshFollowingCache(username: string): Promise<boolean>;
+  refreshFollowingCache(username: string, following: Array<{ userId: string; username: string; name: string }>): Promise<void>;
+  getRandomFollowingUser(username: string): Promise<FollowingCache | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -550,11 +556,68 @@ export class DatabaseStorage implements IStorage {
     const db = await this.getDb();
     const today = new Date().toISOString().split('T')[0];
     await db.update(organicActivitySchedule)
-      .set({ 
+      .set({
         likesCompletedToday: 0,
         lastLikeDate: today,
         dailyLikesTarget: sql`floor(random() * 13 + 3)` // Random 3-15
       });
+  }
+
+  // Following cache methods
+  async getFollowingCache(username: string): Promise<FollowingCache[]> {
+    const db = await this.getDb();
+    return await db.select().from(followingCache).where(eq(followingCache.username, username));
+  }
+
+  async shouldRefreshFollowingCache(username: string): Promise<boolean> {
+    const db = await this.getDb();
+    const cached = await db.select().from(followingCache)
+      .where(eq(followingCache.username, username))
+      .limit(1);
+
+    if (cached.length === 0) {
+      return true; // No cache, needs refresh
+    }
+
+    // Check if last refresh was more than 30 days ago
+    const lastRefreshed = new Date(cached[0].lastRefreshed);
+    const now = new Date();
+    const daysSinceRefresh = (now.getTime() - lastRefreshed.getTime()) / (1000 * 60 * 60 * 24);
+
+    return daysSinceRefresh >= 30;
+  }
+
+  async refreshFollowingCache(username: string, following: Array<{ userId: string; username: string; name: string }>): Promise<void> {
+    const db = await this.getDb();
+
+    // Delete old cache for this user
+    await db.delete(followingCache).where(eq(followingCache.username, username));
+
+    // Insert new cache
+    if (following.length > 0) {
+      await db.insert(followingCache).values(
+        following.map(f => ({
+          username,
+          followingUsername: f.username,
+          followingUserId: f.userId,
+          followingName: f.name,
+          lastRefreshed: new Date()
+        }))
+      );
+    }
+  }
+
+  async getRandomFollowingUser(username: string): Promise<FollowingCache | undefined> {
+    const db = await this.getDb();
+    const cached = await db.select().from(followingCache)
+      .where(eq(followingCache.username, username));
+
+    if (cached.length === 0) {
+      return undefined;
+    }
+
+    const randomIndex = Math.floor(Math.random() * cached.length);
+    return cached[randomIndex];
   }
 }
 
@@ -1068,6 +1131,66 @@ export class MemStorage implements IStorage {
         dailyLikesTarget: Math.floor(Math.random() * 13) + 3
       });
     }
+  }
+
+  // Following cache methods (memory storage - simple implementation)
+  private followingCacheMap: Map<string, Array<{ username: string; userId: string; name: string; lastRefreshed: Date }>> = new Map();
+
+  async getFollowingCache(username: string): Promise<FollowingCache[]> {
+    const cached = this.followingCacheMap.get(username) || [];
+    return cached.map((f, idx) => ({
+      id: `${username}-${idx}`,
+      username,
+      followingUsername: f.username,
+      followingUserId: f.userId,
+      followingName: f.name,
+      lastRefreshed: f.lastRefreshed,
+      createdAt: f.lastRefreshed
+    }));
+  }
+
+  async shouldRefreshFollowingCache(username: string): Promise<boolean> {
+    const cached = this.followingCacheMap.get(username);
+    if (!cached || cached.length === 0) {
+      return true;
+    }
+
+    const lastRefreshed = cached[0].lastRefreshed;
+    const now = new Date();
+    const daysSinceRefresh = (now.getTime() - lastRefreshed.getTime()) / (1000 * 60 * 60 * 24);
+
+    return daysSinceRefresh >= 30;
+  }
+
+  async refreshFollowingCache(username: string, following: Array<{ userId: string; username: string; name: string }>): Promise<void> {
+    this.followingCacheMap.set(
+      username,
+      following.map(f => ({
+        username: f.username,
+        userId: f.userId,
+        name: f.name,
+        lastRefreshed: new Date()
+      }))
+    );
+  }
+
+  async getRandomFollowingUser(username: string): Promise<FollowingCache | undefined> {
+    const cached = this.followingCacheMap.get(username) || [];
+    if (cached.length === 0) {
+      return undefined;
+    }
+
+    const randomIndex = Math.floor(Math.random() * cached.length);
+    const f = cached[randomIndex];
+    return {
+      id: `${username}-${randomIndex}`,
+      username,
+      followingUsername: f.username,
+      followingUserId: f.userId,
+      followingName: f.name,
+      lastRefreshed: f.lastRefreshed,
+      createdAt: f.lastRefreshed
+    };
   }
 }
 

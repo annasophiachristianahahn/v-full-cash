@@ -348,6 +348,215 @@ export class TwexApiService {
       likeError: likeResult.error
     };
   }
+
+  /**
+   * Get list of accounts that a user follows
+   */
+  async getFollowing(params: {
+    username: string;
+    twitterCookie: string;
+    limit?: number;
+  }): Promise<{ success: boolean; following?: Array<{ userId: string; username: string; name: string }>; error?: string }> {
+    try {
+      const fullCookie = params.twitterCookie;
+      const proxy = proxyManager.isProxyEnabled()
+        ? proxyManager.getProxyForUser(params.username)
+        : undefined;
+
+      const requestBody: any = {
+        username: params.username,
+        cookie: fullCookie
+      };
+
+      if (params.limit) {
+        requestBody.limit = params.limit;
+      }
+
+      if (proxy) {
+        requestBody.proxy = proxy;
+      }
+
+      console.log(`[TwexAPI] ========== GET FOLLOWING REQUEST ==========`);
+      console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/following`);
+      console.log(`[TwexAPI] Getting following list for @${params.username}`);
+
+      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/following`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data: TwexApiResponse = await response.json();
+
+      console.log(`[TwexAPI] ========== GET FOLLOWING RESPONSE ==========`);
+      console.log(`[TwexAPI] HTTP Status: ${response.status} ${response.statusText}`);
+      console.log(`[TwexAPI] Response code: ${data.code}, msg: ${data.msg}`);
+
+      const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
+
+      if (!isSuccess) {
+        const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
+        console.error(`[TwexAPI] ❌ Get following failed - HTTP ${response.status}: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+
+      const followingList = (data.data || []).map((user: any) => ({
+        userId: user.userId,
+        username: user.username,
+        name: user.name
+      }));
+
+      console.log(`[TwexAPI] ✅ Retrieved ${followingList.length} following accounts`);
+
+      return { success: true, following: followingList };
+
+    } catch (error: any) {
+      console.error('[TwexAPI] Error getting following list:', error);
+      return {
+        success: false,
+        error: error.message || 'Network error while getting following list'
+      };
+    }
+  }
+
+  /**
+   * Search for tweets (can search by user with "from:username")
+   */
+  async advancedSearch(params: {
+    searchTerms: string[];
+    username: string;
+    twitterCookie: string;
+    maxItems?: number;
+    sortBy?: 'Latest' | 'Top';
+  }): Promise<{ success: boolean; tweets?: Array<{ tweetId: string; tweetUrl: string; text: string; authorHandle: string }>; error?: string }> {
+    try {
+      const fullCookie = params.twitterCookie;
+      const proxy = proxyManager.isProxyEnabled()
+        ? proxyManager.getProxyForUser(params.username)
+        : undefined;
+
+      const requestBody: any = {
+        searchTerms: params.searchTerms,
+        maxItems: params.maxItems || 10,
+        sortBy: params.sortBy || 'Latest',
+        cookie: fullCookie
+      };
+
+      if (proxy) {
+        requestBody.proxy = proxy;
+      }
+
+      console.log(`[TwexAPI] ========== ADVANCED SEARCH REQUEST ==========`);
+      console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/advanced_search`);
+      console.log(`[TwexAPI] Search terms: ${params.searchTerms.join(', ')}`);
+
+      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/advanced_search`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data: TwexApiResponse = await response.json();
+
+      console.log(`[TwexAPI] ========== ADVANCED SEARCH RESPONSE ==========`);
+      console.log(`[TwexAPI] HTTP Status: ${response.status} ${response.statusText}`);
+      console.log(`[TwexAPI] Response code: ${data.code}, msg: ${data.msg}`);
+
+      const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
+
+      if (!isSuccess) {
+        const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
+        console.error(`[TwexAPI] ❌ Search failed - HTTP ${response.status}: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+
+      const tweets = (data.data || []).map((tweet: any) => ({
+        tweetId: tweet.id || tweet.tweet_id || tweet.rest_id,
+        tweetUrl: tweet.url || `https://x.com/i/status/${tweet.id || tweet.tweet_id || tweet.rest_id}`,
+        text: tweet.text || tweet.full_text || '',
+        authorHandle: tweet.author_handle || tweet.username || tweet.screen_name || ''
+      }));
+
+      console.log(`[TwexAPI] ✅ Found ${tweets.length} tweets`);
+
+      return { success: true, tweets };
+
+    } catch (error: any) {
+      console.error('[TwexAPI] Error searching tweets:', error);
+      return {
+        success: false,
+        error: error.message || 'Network error while searching tweets'
+      };
+    }
+  }
+
+  /**
+   * Retweet a tweet
+   */
+  async retweet(params: {
+    tweetId: string;
+    username: string;
+    twitterCookie: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const fullCookie = params.twitterCookie;
+      const proxy = proxyManager.isProxyEnabled()
+        ? proxyManager.getProxyForUser(params.username)
+        : undefined;
+
+      const requestBody: any = {
+        cookie: fullCookie
+      };
+
+      if (proxy) {
+        requestBody.proxy = proxy;
+      }
+
+      console.log(`[TwexAPI] ========== RETWEET REQUEST ==========`);
+      console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/retweet`);
+      console.log(`[TwexAPI] Method: POST`);
+
+      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/retweet`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data: TwexApiResponse = await response.json();
+
+      console.log(`[TwexAPI] ========== RETWEET RESPONSE ==========`);
+      console.log(`[TwexAPI] HTTP Status: ${response.status} ${response.statusText}`);
+      console.log(`[TwexAPI] Response Body:`, JSON.stringify(data, null, 2));
+
+      const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
+
+      if (!isSuccess) {
+        const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
+        console.error(`[TwexAPI] ❌ Retweet failed - HTTP ${response.status}: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+
+      console.log(`[TwexAPI] ✅ Tweet retweeted successfully`);
+
+      return { success: true };
+
+    } catch (error: any) {
+      console.error('[TwexAPI] Error retweeting:', error);
+      return {
+        success: false,
+        error: error.message || 'Network error while retweeting'
+      };
+    }
+  }
 }
 
 export const twexApiService = new TwexApiService();

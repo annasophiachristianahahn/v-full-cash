@@ -241,3 +241,22 @@ export type InsertOrganicActivity = z.infer<typeof insertOrganicActivitySchema>;
 export type OrganicActivity = typeof organicActivity.$inferSelect;
 export type InsertOrganicActivitySchedule = z.infer<typeof insertOrganicActivityScheduleSchema>;
 export type OrganicActivitySchedule = typeof organicActivitySchedule.$inferSelect;
+
+// Following Cache - stores list of accounts each user follows (refreshed monthly)
+export const followingCache = pgTable("following_cache", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: text("username").notNull(), // Twitter account username
+  followingUsername: text("following_username").notNull(), // Username of account they follow
+  followingUserId: text("following_user_id"), // User ID of account they follow
+  followingName: text("following_name"), // Display name of account they follow
+  lastRefreshed: timestamp("last_refreshed").notNull().default(sql`now()`), // When this cache was last updated
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertFollowingCacheSchema = createInsertSchema(followingCache).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertFollowingCache = z.infer<typeof insertFollowingCacheSchema>;
+export type FollowingCache = typeof followingCache.$inferSelect;
