@@ -328,7 +328,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Pre-generate raid replies and select accounts
       if (raidRounds > 0 && otherAccounts.length > 0) {
         const usedAccounts: string[] = [];
-        let delayOffset = 30; // Start raid replies 30 seconds after primary completes
+        // Start raid replies 45 seconds after primary completes
+        // This ensures 30s+ gap after the primary's LIKE call (which happens 6-11s after reply)
+        let delayOffset = 45;
         
         for (let round = 0; round < raidRounds; round++) {
           const availableForRound = otherAccounts.filter(
