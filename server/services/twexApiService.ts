@@ -102,11 +102,30 @@ export class TwexApiService {
       // TwexAPI may return the ID in different formats, log the data structure
       console.log(`[TwexAPI] Response data structure:`, JSON.stringify(data.data, null, 2));
 
+      // Check if TwexAPI returned a Twitter error code in the data
+      if (data.data?.code && !data.data?.tweet_id) {
+        const twitterErrorCode = data.data.code;
+        const errorMessages: Record<number, string> = {
+          90: 'Rate limit exceeded or invalid/expired token',
+          89: 'Invalid or expired token',
+          326: 'Account locked',
+          261: 'Application cannot perform write actions'
+        };
+        const errorMsg = errorMessages[twitterErrorCode] || `Twitter error code ${twitterErrorCode}`;
+        console.error(`[TwexAPI] Twitter API error in response:`, errorMsg);
+        return { success: false, error: `Twitter API error: ${errorMsg}` };
+      }
+
       // Try multiple extraction methods
       const replyId = data.data?.tweet_id || data.data?.id || data.data?.rest_id || (typeof data.data === 'string' ? data.data : null);
-      const replyUrl = replyId ? `https://x.com/i/status/${replyId}` : undefined;
 
-      console.log(`[TwexAPI] ✅ Reply posted successfully: ${replyUrl || 'URL not available (missing tweet ID)'}`);
+      if (!replyId) {
+        console.error(`[TwexAPI] No tweet ID in successful response - tweet may not have been posted`);
+        return { success: false, error: 'Tweet posted but no ID returned - verify on Twitter' };
+      }
+
+      const replyUrl = `https://x.com/i/status/${replyId}`;
+      console.log(`[TwexAPI] ✅ Reply posted successfully: ${replyUrl}`);
 
       return {
         success: true,
