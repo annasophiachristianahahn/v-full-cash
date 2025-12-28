@@ -85,7 +85,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auto-run/start", async (req, res) => {
     try {
-      const { maxTweets = 50, sendDm = true } = req.body;
+      const { maxTweets = 50, sendDm = false } = req.body;
 
       const storage = await getStorage();
       

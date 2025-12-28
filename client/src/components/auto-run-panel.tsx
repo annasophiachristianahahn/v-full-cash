@@ -32,7 +32,7 @@ const defaultAutoRunState: AutoRunState = {
 
 export function AutoRunPanel({ selectedUsername }: AutoRunPanelProps) {
   const { toast } = useToast();
-  const [sendDm, setSendDm] = useState(true);
+  const [sendDm, setSendDm] = useState(false);
   const [maxTweets, setMaxTweets] = useState(50);
 
   const { autoRunState: sseAutoRunState } = useSSE();
