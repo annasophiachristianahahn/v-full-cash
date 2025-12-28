@@ -373,6 +373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use a unique run ID to match the job, since job ID isn't available until after await
       const runId = `single-auto-run-${Date.now()}-${Math.random().toString(36).substring(7)}`;
       const raidJobIds: string[] = [];
+      const completedRaidUrls: string[] = []; // Track completed raid reply URLs for cross-liking
       let listenerHandled = false;
       
       const onJobCompleted = async (completedJob: any) => {
@@ -433,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`[SingleAutoRun] Primary job completed but no replyUrl in result:`, completedJob.result);
         }
         
-        // Remove listener after handling
+        // Remove primary listener after handling (keep raid listener active)
         jobManager.off('job:completed', onJobCompleted);
       };
       
