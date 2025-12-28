@@ -86,6 +86,8 @@ export class TwexApiService {
       if (!response.ok || !data.success) {
         const errorMsg = data.error || data.message || 'Unknown error from TwexAPI';
         console.error(`[TwexAPI] Reply failed:`, errorMsg);
+        console.error(`[TwexAPI] Full response:`, JSON.stringify(data, null, 2));
+        console.error(`[TwexAPI] HTTP Status:`, response.status);
         return { success: false, error: errorMsg };
       }
 
@@ -152,6 +154,8 @@ export class TwexApiService {
       if (!response.ok || !data.success) {
         const errorMsg = data.error || data.message || 'Unknown error from TwexAPI';
         console.error(`[TwexAPI] Like failed:`, errorMsg);
+        console.error(`[TwexAPI] Full response:`, JSON.stringify(data, null, 2));
+        console.error(`[TwexAPI] HTTP Status:`, response.status);
         return { success: false, error: errorMsg };
       }
 
