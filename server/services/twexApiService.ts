@@ -99,10 +99,14 @@ export class TwexApiService {
       }
 
       // Extract tweet ID from response
-      const replyId = data.data?.tweet_id || data.data?.id;
+      // TwexAPI may return the ID in different formats, log the data structure
+      console.log(`[TwexAPI] Response data structure:`, JSON.stringify(data.data, null, 2));
+
+      // Try multiple extraction methods
+      const replyId = data.data?.tweet_id || data.data?.id || data.data?.rest_id || (typeof data.data === 'string' ? data.data : null);
       const replyUrl = replyId ? `https://x.com/i/status/${replyId}` : undefined;
 
-      console.log(`[TwexAPI] ✅ Reply posted successfully: ${replyUrl}`);
+      console.log(`[TwexAPI] ✅ Reply posted successfully: ${replyUrl || 'URL not available (missing tweet ID)'}`);
 
       return {
         success: true,
