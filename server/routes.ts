@@ -234,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Single Tweet Auto Run - runs full auto-run chain for a single tweet
   app.post("/api/single-auto-run", async (req, res) => {
     try {
-      const { tweetUrl, sendDm = true } = req.body;
+      const { tweetUrl, sendDm = false } = req.body; // DM disabled temporarily
       
       if (!tweetUrl) {
         return res.status(400).json({ error: "tweetUrl is required" });
@@ -328,10 +328,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Pre-generate raid replies and select accounts
       if (raidRounds > 0 && otherAccounts.length > 0) {
         const usedAccounts: string[] = [];
-        // Start first raid reply 90-120 seconds after primary completes
-        // This accounts for: primary like (6-11s) + DM delay (45s) + DM execution (6s) + buffer (30-60s)
-        // Ensures safe gap after all TwexAPI calls
-        let delayOffset = Math.floor(Math.random() * 30) + 90; // 90-120 seconds
+        // Start first raid reply 45-75 seconds after primary completes
+        // This accounts for: primary like (6-11s) + buffer (30-60s)
+        // Ensures safe gap after TwexAPI calls (DM disabled)
+        let delayOffset = Math.floor(Math.random() * 30) + 45; // 45-75 seconds
         
         for (let round = 0; round < raidRounds; round++) {
           const availableForRound = otherAccounts.filter(
