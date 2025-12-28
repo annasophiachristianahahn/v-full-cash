@@ -163,7 +163,8 @@ class ReplyQueue {
           replyText: data.replyText,
           twitterCookie: settings.twitterCookie,
           mediaUrl: finalMediaUrl,
-          username: data.username
+          username: data.username,
+          tweetUrl: data.tweetUrl
         });
         
         result = {
@@ -189,7 +190,8 @@ class ReplyQueue {
           replyText: data.replyText,
           twitterCookie: settings.twitterCookie,
           mediaUrl: finalMediaUrl,
-          username: data.username
+          username: data.username,
+          tweetUrl: data.tweetUrl
         });
       }
 
