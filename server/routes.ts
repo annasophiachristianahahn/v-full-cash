@@ -328,9 +328,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Pre-generate raid replies and select accounts
       if (raidRounds > 0 && otherAccounts.length > 0) {
         const usedAccounts: string[] = [];
-        // Start raid replies 45 seconds after primary completes
-        // This ensures 30s+ gap after the primary's LIKE call (which happens 6-11s after reply)
-        let delayOffset = 45;
+        // Start first raid reply 45-75 seconds after primary completes (randomized for humanization)
+        // This ensures 34-64s gap after the primary's LIKE call (which happens 6-11s after reply)
+        // Well above TwexAPI's 5s minimum between calls
+        let delayOffset = Math.floor(Math.random() * 30) + 45; // 45-75 seconds
         
         for (let round = 0; round < raidRounds; round++) {
           const availableForRound = otherAccounts.filter(
