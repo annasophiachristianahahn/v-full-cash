@@ -50,10 +50,8 @@ export class TwexApiService {
     mediaUrl?: string;
   }): Promise<{ success: boolean; replyId?: string; replyUrl?: string; error?: string }> {
     try {
-      // TwexAPI docs show cookie can be "ct0=..." OR just the auth_token value
-      // Try extracting just the auth_token value first
-      const authTokenMatch = params.twitterCookie.match(/auth_token=([^;]+)/);
-      const cookieValue = authTokenMatch ? authTokenMatch[1] : params.twitterCookie;
+      // TwexAPI accepts the full cookie string
+      const fullCookie = params.twitterCookie;
 
       const proxy = proxyManager.isProxyEnabled()
         ? proxyManager.getProxyForUser(params.username)
@@ -61,9 +59,8 @@ export class TwexApiService {
 
       const requestBody: any = {
         tweet_content: params.replyText,
-        cookie: cookieValue,
-        reply_tweet_id: params.tweetId,
-        delegated_account_username: params.username
+        cookie: fullCookie,
+        reply_tweet_id: params.tweetId
       };
 
       if (params.mediaUrl) {
@@ -161,17 +158,15 @@ export class TwexApiService {
     twitterCookie: string;
   }): Promise<{ success: boolean; error?: string }> {
     try {
-      // TwexAPI docs show cookie can be "ct0=..." OR just the auth_token value
-      const authTokenMatch = params.twitterCookie.match(/auth_token=([^;]+)/);
-      const cookieValue = authTokenMatch ? authTokenMatch[1] : params.twitterCookie;
+      // TwexAPI accepts the full cookie string
+      const fullCookie = params.twitterCookie;
 
       const proxy = proxyManager.isProxyEnabled()
         ? proxyManager.getProxyForUser(params.username)
         : undefined;
 
       const requestBody: any = {
-        cookie: cookieValue,
-        delegated_account_username: params.username
+        cookie: fullCookie
       };
 
       if (proxy) {
@@ -239,9 +234,8 @@ export class TwexApiService {
     replyToMessageId?: string;
   }): Promise<{ success: boolean; error?: string }> {
     try {
-      // TwexAPI docs show cookie can be "ct0=..." OR just the auth_token value
-      const authTokenMatch = params.twitterCookie.match(/auth_token=([^;]+)/);
-      const cookieValue = authTokenMatch ? authTokenMatch[1] : params.twitterCookie;
+      // TwexAPI accepts the full cookie string
+      const fullCookie = params.twitterCookie;
 
       const proxy = proxyManager.isProxyEnabled()
         ? proxyManager.getProxyForUser(params.senderUsername)
@@ -250,8 +244,7 @@ export class TwexApiService {
       const requestBody: any = {
         username: params.recipientUsername,
         msg: params.message,
-        cookie: cookieValue,
-        delegated_account_username: params.senderUsername
+        cookie: fullCookie
       };
 
       if (params.replyToMessageId) {
