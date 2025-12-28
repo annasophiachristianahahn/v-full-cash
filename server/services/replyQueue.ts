@@ -296,10 +296,10 @@ class ReplyQueue {
 
       console.log(`📤 [ReplyQueue] Sending DM from @${data.username} with reply URL: ${data.message}`);
 
-      const result = await twitterAutomation.sendDm({
+      const result = await twitterAutomation.sendDM({
+        recipientUsername: 'secretary_VAJ',  // Send to VAJ group
         message: data.message,
         twitterCookie: settings.twitterCookie,
-        groupChatId: '1969047827406831927',
         username: data.username
       });
 
