@@ -71,6 +71,7 @@ export class TwexApiService {
       }
 
       console.log(`[TwexAPI] Posting reply from @${params.username} to tweet ${params.tweetId}${proxy ? ' (via proxy)' : ''}`);
+      console.log(`[TwexAPI] Request body:`, JSON.stringify(requestBody, null, 2));
 
       const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/tweets/create`, {
         method: 'POST',
