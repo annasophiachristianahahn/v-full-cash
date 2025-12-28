@@ -325,9 +325,12 @@ export class TwexApiService {
     // Post reply first
     const replyResult = await this.postReply(params);
 
-    // Wait 6 seconds to respect TwexAPI rate limit (5 seconds minimum between requests)
-    console.log(`[TwexAPI] ⏳ Waiting 6s before like (TwexAPI rate limit: 5s between calls)`);
-    await new Promise(resolve => setTimeout(resolve, 6000));
+    // Wait 6-11 seconds to respect TwexAPI rate limit (5 seconds minimum between requests)
+    // Random delay adds humanization and ensures we never hit rate limits
+    const delayMs = Math.floor(Math.random() * 5000) + 6000; // 6000-11000ms
+    const delaySec = (delayMs / 1000).toFixed(1);
+    console.log(`[TwexAPI] ⏳ Waiting ${delaySec}s before like (TwexAPI rate limit: 5s between calls)`);
+    await new Promise(resolve => setTimeout(resolve, delayMs));
 
     // Then like the original tweet
     const likeResult = await this.likeTweet({
