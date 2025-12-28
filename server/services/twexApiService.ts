@@ -72,8 +72,18 @@ export class TwexApiService {
         requestBody.proxy = proxy;
       }
 
-      console.log(`[TwexAPI] Posting reply from @${params.username} to tweet ${params.tweetId}${proxy ? ' (via proxy)' : ''}`);
-      console.log(`[TwexAPI] Request body:`, JSON.stringify(requestBody, null, 2));
+      console.log(`[TwexAPI] ========== POST REPLY REQUEST ==========`);
+      console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/tweets/create`);
+      console.log(`[TwexAPI] Method: POST`);
+      console.log(`[TwexAPI] Headers:`, JSON.stringify({
+        'Authorization': `Bearer ${TWEXAPI_TOKEN.substring(0, 20)}...`,
+        'Content-Type': 'application/json'
+      }, null, 2));
+      console.log(`[TwexAPI] Request Body:`, JSON.stringify({
+        ...requestBody,
+        cookie: `${requestBody.cookie.substring(0, 50)}... [${requestBody.cookie.length} chars total]`,
+        proxy: proxy ? `${proxy.substring(0, 30)}...` : undefined
+      }, null, 2));
 
       const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/tweets/create`, {
         method: 'POST',
@@ -86,21 +96,19 @@ export class TwexApiService {
 
       const data: TwexApiResponse = await response.json();
 
+      console.log(`[TwexAPI] ========== POST REPLY RESPONSE ==========`);
+      console.log(`[TwexAPI] HTTP Status: ${response.status} ${response.statusText}`);
+      console.log(`[TwexAPI] Response Body:`, JSON.stringify(data, null, 2));
+
       // TwexAPI uses 'code' and 'msg' fields
       // Success is indicated by HTTP 200 and code in 200-299 range OR msg === 'success'
       const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
 
       if (!isSuccess) {
         const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
-        console.error(`[TwexAPI] Reply failed:`, errorMsg);
-        console.error(`[TwexAPI] Full response:`, JSON.stringify(data, null, 2));
-        console.error(`[TwexAPI] HTTP Status:`, response.status);
+        console.error(`[TwexAPI] ❌ Reply failed - HTTP ${response.status}: ${errorMsg}`);
         return { success: false, error: errorMsg };
       }
-
-      // Extract tweet ID from response
-      // TwexAPI may return the ID in different formats, log the data structure
-      console.log(`[TwexAPI] Response data structure:`, JSON.stringify(data.data, null, 2));
 
       // Check if TwexAPI returned a Twitter error code in the data
       if (data.data?.code && !data.data?.tweet_id) {
@@ -167,7 +175,18 @@ export class TwexApiService {
         requestBody.proxy = proxy;
       }
 
-      console.log(`[TwexAPI] Liking tweet ${params.tweetId} from @${params.username}${proxy ? ' (via proxy)' : ''}`);
+      console.log(`[TwexAPI] ========== LIKE TWEET REQUEST ==========`);
+      console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/like`);
+      console.log(`[TwexAPI] Method: POST`);
+      console.log(`[TwexAPI] Headers:`, JSON.stringify({
+        'Authorization': `Bearer ${TWEXAPI_TOKEN.substring(0, 20)}...`,
+        'Content-Type': 'application/json'
+      }, null, 2));
+      console.log(`[TwexAPI] Request Body:`, JSON.stringify({
+        ...requestBody,
+        cookie: `${requestBody.cookie.substring(0, 50)}... [${requestBody.cookie.length} chars total]`,
+        proxy: proxy ? `${proxy.substring(0, 30)}...` : undefined
+      }, null, 2));
 
       const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/like`, {
         method: 'POST',
@@ -180,14 +199,16 @@ export class TwexApiService {
 
       const data: TwexApiResponse = await response.json();
 
+      console.log(`[TwexAPI] ========== LIKE TWEET RESPONSE ==========`);
+      console.log(`[TwexAPI] HTTP Status: ${response.status} ${response.statusText}`);
+      console.log(`[TwexAPI] Response Body:`, JSON.stringify(data, null, 2));
+
       // TwexAPI uses 'code' and 'msg' fields
       const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
 
       if (!isSuccess) {
         const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
-        console.error(`[TwexAPI] Like failed:`, errorMsg);
-        console.error(`[TwexAPI] Full response:`, JSON.stringify(data, null, 2));
-        console.error(`[TwexAPI] HTTP Status:`, response.status);
+        console.error(`[TwexAPI] ❌ Like failed - HTTP ${response.status}: ${errorMsg}`);
         return { success: false, error: errorMsg };
       }
 
@@ -237,7 +258,18 @@ export class TwexApiService {
         requestBody.proxy = proxy;
       }
 
-      console.log(`[TwexAPI] Sending DM from @${params.senderUsername} to @${params.recipientUsername}${proxy ? ' (via proxy)' : ''}`);
+      console.log(`[TwexAPI] ========== SEND DM REQUEST ==========`);
+      console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/send-dm`);
+      console.log(`[TwexAPI] Method: POST`);
+      console.log(`[TwexAPI] Headers:`, JSON.stringify({
+        'Authorization': `Bearer ${TWEXAPI_TOKEN.substring(0, 20)}...`,
+        'Content-Type': 'application/json'
+      }, null, 2));
+      console.log(`[TwexAPI] Request Body:`, JSON.stringify({
+        ...requestBody,
+        cookie: `${requestBody.cookie.substring(0, 50)}... [${requestBody.cookie.length} chars total]`,
+        proxy: proxy ? `${proxy.substring(0, 30)}...` : undefined
+      }, null, 2));
 
       const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/send-dm`, {
         method: 'POST',
@@ -250,14 +282,16 @@ export class TwexApiService {
 
       const data: TwexApiResponse = await response.json();
 
+      console.log(`[TwexAPI] ========== SEND DM RESPONSE ==========`);
+      console.log(`[TwexAPI] HTTP Status: ${response.status} ${response.statusText}`);
+      console.log(`[TwexAPI] Response Body:`, JSON.stringify(data, null, 2));
+
       // TwexAPI uses 'code' and 'msg' fields
       const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
 
       if (!isSuccess) {
         const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
-        console.error(`[TwexAPI] DM failed:`, errorMsg);
-        console.error(`[TwexAPI] Full response:`, JSON.stringify(data, null, 2));
-        console.error(`[TwexAPI] HTTP Status:`, response.status);
+        console.error(`[TwexAPI] ❌ DM failed - HTTP ${response.status}: ${errorMsg}`);
         return { success: false, error: errorMsg };
       }
 
