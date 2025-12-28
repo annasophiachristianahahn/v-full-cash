@@ -26,6 +26,7 @@ interface AutoRunState {
   replyJobIds: string[];
   raidReplyJobIds: string[];
   sentReplyUrls: string[];
+  completedRaidReplyUrls: string[]; // Track completed raid URLs for cross-liking
   recentErrors: string[]; // Track last few error messages for UI display
 }
 
@@ -56,6 +57,7 @@ class AutoRunService extends EventEmitter {
     replyJobIds: [],
     raidReplyJobIds: [],
     sentReplyUrls: [],
+    completedRaidReplyUrls: [],
     recentErrors: []
   };
 
@@ -589,14 +591,45 @@ class AutoRunService extends EventEmitter {
     return new Promise((resolve) => {
       let completed = 0;
       const total = jobIds.length;
+      const processedJobIds = new Set<string>(); // Track which jobs we've already processed for cross-liking
 
-      const checkInterval = setInterval(() => {
+      const checkInterval = setInterval(async () => {
         // Count completed/failed jobs from this batch
         completed = 0;
         for (const jobId of jobIds) {
           const job = jobManager.getJob(jobId);
           if (job && (job.status === 'completed' || job.status === 'failed')) {
             completed++;
+
+            // CROSS-LIKING: Process newly completed raid jobs
+            if (job.status === 'completed' && !processedJobIds.has(jobId) && job.result?.replyUrl) {
+              processedJobIds.add(jobId);
+
+              const replyUrl = job.result.replyUrl;
+              const username = job.data.username;
+
+              console.log(`[AutoRun] Raid completed by @${username}: ${replyUrl}`);
+
+              // 60% chance to like each previous raid reply
+              if (this.state.completedRaidReplyUrls.length > 0) {
+                console.log(`[AutoRun] @${username} checking ${this.state.completedRaidReplyUrls.length} previous raids for cross-likes (60% chance each)`);
+
+                for (const previousRaidUrl of this.state.completedRaidReplyUrls) {
+                  if (Math.random() < 0.6) { // 60% chance
+                    const likeDelay = Math.floor(Math.random() * 10) + 5; // 5-15 seconds
+                    await replyQueue.queueLike({
+                      tweetUrl: previousRaidUrl,
+                      username: username,
+                      delaySeconds: likeDelay
+                    });
+                    console.log(`[AutoRun] ❤️ Queued cross-like: @${username} will like previous raid in ${likeDelay}s`);
+                  }
+                }
+              }
+
+              // Add this raid's URL to the list for future raids to potentially like
+              this.state.completedRaidReplyUrls.push(replyUrl);
+            }
           }
         }
 
