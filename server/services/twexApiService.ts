@@ -9,8 +9,11 @@ const TWEXAPI_BASE_URL = 'https://api.twexapi.io';
 const TWEXAPI_TOKEN = process.env.TWEXAPI_TOKEN || 'twitterx_23c263ed5aa668f7097c6220bdc95ce2eb028397a2d7cc92';
 
 interface TwexApiResponse {
-  success: boolean;
+  code: number;
+  msg: string;
   data?: any;
+  // Legacy fields for backward compatibility
+  success?: boolean;
   error?: string;
   message?: string;
 }
@@ -47,10 +50,8 @@ export class TwexApiService {
     mediaUrl?: string;
   }): Promise<{ success: boolean; replyId?: string; replyUrl?: string; error?: string }> {
     try {
-      const ct0 = extractCt0FromCookie(params.twitterCookie);
-      if (!ct0) {
-        return { success: false, error: 'Invalid cookie format - could not extract ct0' };
-      }
+      // TwexAPI expects the full cookie string, not just ct0
+      const fullCookie = params.twitterCookie;
 
       const proxy = proxyManager.isProxyEnabled()
         ? proxyManager.getProxyForUser(params.username)
@@ -58,7 +59,7 @@ export class TwexApiService {
 
       const requestBody: any = {
         tweet_content: params.replyText,
-        cookie: ct0,
+        cookie: fullCookie,
         reply_tweet_id: params.tweetId,
         delegated_account_username: params.username
       };
@@ -85,8 +86,12 @@ export class TwexApiService {
 
       const data: TwexApiResponse = await response.json();
 
-      if (!response.ok || !data.success) {
-        const errorMsg = data.error || data.message || 'Unknown error from TwexAPI';
+      // TwexAPI uses 'code' and 'msg' fields
+      // Success is indicated by HTTP 200 and code in 200-299 range OR msg === 'success'
+      const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
+
+      if (!isSuccess) {
+        const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
         console.error(`[TwexAPI] Reply failed:`, errorMsg);
         console.error(`[TwexAPI] Full response:`, JSON.stringify(data, null, 2));
         console.error(`[TwexAPI] HTTP Status:`, response.status);
@@ -123,17 +128,15 @@ export class TwexApiService {
     twitterCookie: string;
   }): Promise<{ success: boolean; error?: string }> {
     try {
-      const ct0 = extractCt0FromCookie(params.twitterCookie);
-      if (!ct0) {
-        return { success: false, error: 'Invalid cookie format - could not extract ct0' };
-      }
+      // TwexAPI expects the full cookie string
+      const fullCookie = params.twitterCookie;
 
       const proxy = proxyManager.isProxyEnabled()
         ? proxyManager.getProxyForUser(params.username)
         : undefined;
 
       const requestBody: any = {
-        cookie: ct0,
+        cookie: fullCookie,
         delegated_account_username: params.username
       };
 
@@ -154,8 +157,11 @@ export class TwexApiService {
 
       const data: TwexApiResponse = await response.json();
 
-      if (!response.ok || !data.success) {
-        const errorMsg = data.error || data.message || 'Unknown error from TwexAPI';
+      // TwexAPI uses 'code' and 'msg' fields
+      const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
+
+      if (!isSuccess) {
+        const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
         console.error(`[TwexAPI] Like failed:`, errorMsg);
         console.error(`[TwexAPI] Full response:`, JSON.stringify(data, null, 2));
         console.error(`[TwexAPI] HTTP Status:`, response.status);
@@ -186,10 +192,8 @@ export class TwexApiService {
     replyToMessageId?: string;
   }): Promise<{ success: boolean; error?: string }> {
     try {
-      const ct0 = extractCt0FromCookie(params.twitterCookie);
-      if (!ct0) {
-        return { success: false, error: 'Invalid cookie format - could not extract ct0' };
-      }
+      // TwexAPI expects the full cookie string
+      const fullCookie = params.twitterCookie;
 
       const proxy = proxyManager.isProxyEnabled()
         ? proxyManager.getProxyForUser(params.senderUsername)
@@ -198,7 +202,7 @@ export class TwexApiService {
       const requestBody: any = {
         username: params.recipientUsername,
         msg: params.message,
-        cookie: ct0,
+        cookie: fullCookie,
         delegated_account_username: params.senderUsername
       };
 
@@ -223,9 +227,14 @@ export class TwexApiService {
 
       const data: TwexApiResponse = await response.json();
 
-      if (!response.ok || !data.success) {
-        const errorMsg = data.error || data.message || 'Unknown error from TwexAPI';
+      // TwexAPI uses 'code' and 'msg' fields
+      const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
+
+      if (!isSuccess) {
+        const errorMsg = data.msg || data.error || data.message || 'Unknown error from TwexAPI';
         console.error(`[TwexAPI] DM failed:`, errorMsg);
+        console.error(`[TwexAPI] Full response:`, JSON.stringify(data, null, 2));
+        console.error(`[TwexAPI] HTTP Status:`, response.status);
         return { success: false, error: errorMsg };
       }
 
