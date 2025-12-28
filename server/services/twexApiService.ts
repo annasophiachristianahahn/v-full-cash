@@ -59,7 +59,8 @@ export class TwexApiService {
       const requestBody: any = {
         tweet_content: params.replyText,
         cookie: ct0,
-        reply_tweet_id: params.tweetId
+        reply_tweet_id: params.tweetId,
+        delegated_account_username: params.username
       };
 
       if (params.mediaUrl) {
@@ -132,7 +133,8 @@ export class TwexApiService {
         : undefined;
 
       const requestBody: any = {
-        cookie: ct0
+        cookie: ct0,
+        delegated_account_username: params.username
       };
 
       if (proxy) {
@@ -196,7 +198,8 @@ export class TwexApiService {
       const requestBody: any = {
         username: params.recipientUsername,
         msg: params.message,
-        cookie: ct0
+        cookie: ct0,
+        delegated_account_username: params.senderUsername
       };
 
       if (params.replyToMessageId) {

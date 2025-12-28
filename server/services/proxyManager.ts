@@ -45,11 +45,11 @@ const PROXY_CITIES: Record<string, ProxyConfig> = {
 
 // Sticky account-to-city assignments
 const ACCOUNT_CITY_MAP: Record<string, keyof typeof PROXY_CITIES> = {
-  'vajme': 'NEW_YORK',
-  'expert': 'NEW_YORK',
-  'bingo star': 'HOUSTON',
+  'teraqattatpeace': 'NEW_YORK',
+  'vaj_researcher': 'NEW_YORK',
+  'Pisces_3xThreat': 'HOUSTON',
   'homeless_poetry': 'LOS_ANGELES',
-  'dozer': 'LOS_ANGELES'
+  'KILLDOZERAI': 'LOS_ANGELES'
 };
 
 export class ProxyManager {
