@@ -1,7 +1,17 @@
-node_modules/
-dist/
-.env
+node_modules
+dist
 .DS_Store
-*.log
-tmp/
-.turbo/
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Environment files with secrets
+.env
+.env.*
+
+# Chromium cache and crash reports (contain secrets)
+.config/
+.local/
+
+# Attached assets (contain API keys in text files)
+attached_assets/

@@ -1,0 +1,57 @@
+modules = ["nodejs-20", "web", "postgresql-16"]
+run = "npm run dev"
+hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["chromium"]
+
+[deployment]
+deploymentTarget = "gce"
+build = ["npm", "run", "build"]
+run = ["npm", "run", "start"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[env]
+PORT = "5000"
+
+[agent]
+integrations = ["javascript_mem_db:1.0.0", "javascript_openai:1.0.0", "javascript_object_storage:1.0.0"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[userenv]
+
+[userenv.development]
+SCHEDULER_ENABLED = "false"
+APP_URL = "vaj-full-auto-cash.replit.app"
+USE_LOCAL_AUTOMATION = "true"
+
+[userenv.production]
+APP_URL = "vaj-full-auto-cash.replit.app"
+
+[userenv.shared]
+PUPPETEER_EXECUTABLE_PATH = "/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium"
+USE_PROXY = "true"
