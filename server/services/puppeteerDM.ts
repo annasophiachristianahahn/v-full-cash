@@ -4,7 +4,7 @@ import { Browser, Page } from 'puppeteer';
 
 puppeteer.use(StealthPlugin());
 
-const GROUP_CHAT_ID = '1969047827406831927'; // secretary_VAJ
+const GROUP_CHAT_ID = '1969047827406831927'; // vaj prefecture big new sky
 
 // Utility functions
 const randomDelay = (min: number, max: number): number =>
