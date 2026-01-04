@@ -213,36 +213,61 @@ Respond with JSON in this exact format:
   async generateReply(tweetText: string, systemPrompt: string): Promise<string> {
     await rateLimiter.acquire('openrouter');
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000',
-        'X-Title': 'vaj auto cash'
-      },
-      body: JSON.stringify({
-        model: "moonshotai/kimi-k2-0905",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt
-          },
-          {
-            role: "user",
-            content: tweetText
-          }
-        ],
-        max_tokens: 280
-      })
-    });
+    // Try primary model first, fallback to claude-3-haiku if it fails
+    const models = ["moonshotai/kimi-k2-0905", "anthropic/claude-3-haiku"];
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+    for (const model of models) {
+      try {
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000',
+            'X-Title': 'vaj auto cash'
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: tweetText
+              }
+            ],
+            max_tokens: 280
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[OpenRouter] Model ${model} failed: ${response.status} - ${errorText}`);
+          continue; // Try next model
+        }
+
+        const data = await response.json();
+
+        // Validate response structure
+        if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+          console.error(`[OpenRouter] Model ${model} returned empty choices:`, JSON.stringify(data));
+          continue; // Try next model
+        }
+
+        if (!data.choices[0]?.message?.content) {
+          console.error(`[OpenRouter] Model ${model} returned invalid message structure:`, JSON.stringify(data.choices[0]));
+          continue; // Try next model
+        }
+
+        return data.choices[0].message.content.trim();
+      } catch (error) {
+        console.error(`[OpenRouter] Error with model ${model}:`, error);
+        continue; // Try next model
+      }
     }
 
-    const data = await response.json();
-    return data.choices[0].message.content.trim();
+    throw new Error(`All OpenRouter models failed to generate reply`);
   }
 }
