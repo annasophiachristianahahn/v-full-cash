@@ -30,13 +30,14 @@ class ReplyQueue {
   }
 
   private setupListeners() {
-    jobManager.on('job:started', async (job: Job) => {
+    jobManager.on('job:started', (job: Job) => {
+      // Don't await - let jobs process in parallel to avoid blocking
       if (job.type === 'reply') {
-        await this.processReply(job);
+        this.processReply(job);
       } else if (job.type === 'dm') {
-        await this.processDm(job);
+        this.processDm(job);
       } else if (job.type === 'like') {
-        await this.processLike(job);
+        this.processLike(job);
       }
     });
   }
