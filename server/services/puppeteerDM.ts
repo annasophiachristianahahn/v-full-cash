@@ -109,7 +109,9 @@ async function sendSingleDM(
 
   await sleep(randomDelay(minActionDelay * 1000, maxActionDelay * 1000));
   await humanTypeText(page, usedSelector, message, minTypingDelay, maxTypingDelay);
-  await sleep(randomDelay(minActionDelay * 1000, maxActionDelay * 1000));
+
+  // Wait longer after typing to let Twitter enable the send button
+  await sleep(randomDelay(3000, 5000));
 
   const sendButtonSelectors = [
     'button[data-testid="dmComposerSendButton"]',
@@ -118,26 +120,41 @@ async function sendSingleDM(
   ];
 
   let sendSelector: string | null = null;
-  for (const selector of sendButtonSelectors) {
-    try {
-      const button = await page.$(selector);
-      if (button) {
-        const isEnabled = await page.evaluate(
-          (el: Element) => !(el as HTMLButtonElement).disabled && !el.getAttribute('aria-disabled'),
-          button
-        );
-        if (isEnabled) {
-          sendSelector = selector;
-          break;
+  let attempts = 0;
+  const maxAttempts = 5;
+
+  // Try multiple times to find enabled send button (Twitter may need time to enable it)
+  while (!sendSelector && attempts < maxAttempts) {
+    for (const selector of sendButtonSelectors) {
+      try {
+        const button = await page.$(selector);
+        if (button) {
+          const isEnabled = await page.evaluate(
+            (el: Element) => !(el as HTMLButtonElement).disabled && !el.getAttribute('aria-disabled'),
+            button
+          );
+          if (isEnabled) {
+            sendSelector = selector;
+            console.log(`📤 [PuppeteerDM] Found enabled send button: ${selector}`);
+            break;
+          }
         }
+      } catch (err) {
+        continue;
       }
-    } catch (err) {
-      continue;
+    }
+
+    if (!sendSelector) {
+      attempts++;
+      if (attempts < maxAttempts) {
+        console.log(`📤 [PuppeteerDM] Send button not enabled yet, waiting... (attempt ${attempts}/${maxAttempts})`);
+        await sleep(2000);
+      }
     }
   }
 
   if (!sendSelector) {
-    throw new Error('Could not find enabled send button');
+    throw new Error('Could not find enabled send button after multiple attempts');
   }
 
   await page.click(sendSelector);
