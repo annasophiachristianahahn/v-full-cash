@@ -264,7 +264,7 @@ class SchedulerService {
         maxTweets: 50,
         replyDelayRange: { min: 47, max: 88 },
         dmDelayRange: { min: 30, max: 60 },
-        sendDm: false
+        sendDm: true
       };
 
       console.log(`🧪 [Test Trigger] Config: ${JSON.stringify(config, null, 2)}`);
@@ -382,7 +382,7 @@ class SchedulerService {
         maxTweets: 50,
         replyDelayRange: { min: 47, max: 88 },
         dmDelayRange: { min: 30, max: 60 },
-        sendDm: false,
+        sendDm: true,
         raidRounds
       });
 
