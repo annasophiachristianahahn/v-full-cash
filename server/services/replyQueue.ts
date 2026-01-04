@@ -237,7 +237,7 @@ class ReplyQueue {
       }
 
       // Cooldown after each reply to avoid triggering anti-spam
-      const cooldownMs = this.getRandomDelay(8000, 20000); // 8-20 seconds
+      const cooldownMs = this.getRandomDelay(3000, 8000); // 3-8 seconds (TwexAPI is fast)
       console.log(`⏳ [ReplyQueue] Cooldown: ${Math.round(cooldownMs / 1000)}s before next action`);
       await new Promise(resolve => setTimeout(resolve, cooldownMs));
 
@@ -247,7 +247,7 @@ class ReplyQueue {
       jobManager.failJob(job.id, errorMessage || 'Unknown error');
 
       // Cooldown even after failure to avoid rapid retries triggering anti-spam
-      const cooldownMs = this.getRandomDelay(15000, 45000); // 15-45 seconds after failure
+      const cooldownMs = this.getRandomDelay(8000, 20000); // 8-20 seconds after failure
       console.log(`⏳ [ReplyQueue] Failure cooldown: ${Math.round(cooldownMs / 1000)}s`);
       await new Promise(resolve => setTimeout(resolve, cooldownMs));
     } finally {

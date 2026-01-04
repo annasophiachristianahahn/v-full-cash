@@ -1,8 +1,5 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { Browser, Page } from 'puppeteer';
-
-puppeteer.use(StealthPlugin());
+import { Page } from 'puppeteer';
+import { browserManager } from './browserManager';
 
 const GROUP_CHAT_ID = '1969047827406831927'; // vaj prefecture big new sky
 
@@ -41,32 +38,6 @@ const waitForSelectorSafe = async (
   }
 };
 
-const setCookies = async (page: Page, cookieString: string): Promise<void> => {
-  const cookiePairs = cookieString.split(';').map(cookie => {
-    const [name, ...valueParts] = cookie.trim().split('=');
-    const value = valueParts.join('=');
-    return { name: name.trim(), value: value.trim() };
-  });
-
-  const domains = ['.twitter.com', '.x.com'];
-  const allCookies = [];
-
-  for (const domain of domains) {
-    for (const { name, value } of cookiePairs) {
-      allCookies.push({
-        name,
-        value,
-        domain,
-        path: '/',
-        httpOnly: false,
-        secure: true
-      });
-    }
-  }
-
-  await page.setCookie(...allCookies);
-};
-
 async function sendSingleDM(
   page: Page,
   message: string,
@@ -88,7 +59,7 @@ async function sendSingleDM(
   if (!skipNavigation) {
     const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
     await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(randomDelay(1500, 2500));
+    await sleep(randomDelay(1000, 1500));
   }
 
   const messageInputSelectors = [
@@ -115,7 +86,7 @@ async function sendSingleDM(
   // Use paste for URLs (natural human behavior) or type for custom messages
   if (usePaste) {
     await page.click(usedSelector);
-    await sleep(randomDelay(200, 500));
+    await sleep(randomDelay(150, 300));
     // Simulate paste: Ctrl+V on Windows/Linux, Cmd+V on Mac
     await page.keyboard.down('Control');
     await page.keyboard.press('KeyV');
@@ -128,13 +99,13 @@ async function sendSingleDM(
         document.execCommand('insertText', false, text);
       }
     }, usedSelector, message);
-    await sleep(randomDelay(500, 1000));
+    await sleep(randomDelay(300, 600));
   } else {
     await humanTypeText(page, usedSelector, message, 50, 150);
   }
 
   // Shorter wait after paste - Twitter detects paste faster than typing
-  await sleep(randomDelay(1500, 2500));
+  await sleep(randomDelay(800, 1500));
 
   const sendButtonSelectors = [
     'button[data-testid="dmComposerSendButton"]',
@@ -171,7 +142,7 @@ async function sendSingleDM(
       attempts++;
       if (attempts < maxAttempts) {
         console.log(`📤 [PuppeteerDM] Send button not enabled yet, waiting... (attempt ${attempts}/${maxAttempts})`);
-        await sleep(2000);
+        await sleep(1500);
       }
     }
   }
@@ -181,7 +152,7 @@ async function sendSingleDM(
   }
 
   await page.click(sendSelector);
-  await sleep(randomDelay(500, 1000)); // Reduced - just confirm click registered
+  await sleep(randomDelay(300, 600)); // Reduced - just confirm click registered
 }
 
 export interface SendDMParams {
@@ -198,116 +169,62 @@ export interface SendDMResult {
 }
 
 /**
- * Send a Twitter DM using Puppeteer with proxy support
+ * Send a Twitter DM using the shared browserManager (much faster than launching new browser)
  */
 export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult> {
-  const { message, twitterCookie, username, proxy } = params;
-
-  let browser: Browser | null = null;
+  const { message, twitterCookie, username } = params;
 
   try {
-    console.log(`📤 [PuppeteerDM] Sending DM from @${username}`);
+    console.log(`📤 [PuppeteerDM] Sending DM from @${username} (using shared browser)`);
     console.log(`📤 [PuppeteerDM] Message: ${message}`);
-    if (proxy) {
-      console.log(`📤 [PuppeteerDM] Using proxy: ${proxy.substring(0, 30)}...`);
-    }
 
-    const launchOptions: any = {
-      headless: 'new',
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--window-size=1920,1080',
-        '--disable-blink-features=AutomationControlled'
-      ]
-    };
+    // Use browserManager's executeTask which handles browser lifecycle, proxy, and cookies
+    const result = await browserManager.executeTask(async (page: Page) => {
+      // Set cookies for this user
+      await browserManager.setCookies(page, twitterCookie);
 
-    // Add proxy if provided
-    if (proxy) {
-      // Extract host:port from proxy URL (format: http://user:pass@host:port)
-      const proxyHostMatch = proxy.match(/@([^:]+):(\d+)/);
-      if (proxyHostMatch) {
-        const [, host, port] = proxyHostMatch;
-        launchOptions.args.push(`--proxy-server=${host}:${port}`);
-      } else {
-        // Fallback: use proxy as-is if format doesn't match
-        launchOptions.args.push(`--proxy-server=${proxy}`);
+      // Go directly to messages
+      console.log('📤 [PuppeteerDM] Navigating to messages');
+      const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
+      await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(randomDelay(800, 1200));
+
+      // Check authentication
+      const loggedInIndicators = [
+        'a[data-testid="AppTabBar_Home_Link"]',
+        'a[aria-label="Home"]',
+        'nav[aria-label="Primary"]'
+      ];
+
+      let isLoggedIn = false;
+      for (const selector of loggedInIndicators) {
+        if (await page.$(selector) !== null) {
+          isLoggedIn = true;
+          break;
+        }
       }
-    }
 
-    browser = await puppeteer.launch(launchOptions);
-    const page = await browser.newPage();
-
-    // Handle proxy authentication if proxy is provided
-    if (proxy) {
-      // Extract credentials from proxy URL (format: http://user:pass@host:port)
-      const proxyMatch = proxy.match(/http:\/\/([^:]+):([^@]+)@/);
-      if (proxyMatch) {
-        const [, proxyUsername, proxyPassword] = proxyMatch;
-        await page.authenticate({
-          username: proxyUsername,
-          password: proxyPassword
-        });
-        console.log('📤 [PuppeteerDM] Proxy authentication configured');
+      if (!isLoggedIn) {
+        throw new Error('Cookie authentication failed - cookies may be expired or invalid');
       }
-    }
 
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.setExtraHTTPHeaders({
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-    });
+      console.log('✅ [PuppeteerDM] Successfully authenticated');
 
-    // Set cookies before navigating (faster than reload)
-    console.log('📤 [PuppeteerDM] Setting up authentication');
-    await setCookies(page, twitterCookie);
+      // Send the DM - use paste for URL (natural behavior), skip navigation since we're already there
+      await sendSingleDM(page, message, {
+        usePaste: true,
+        minActionDelay: 0.5,
+        maxActionDelay: 1,
+        skipNavigation: true // Already navigated above
+      });
 
-    // Go directly to messages (skip home page)
-    console.log('📤 [PuppeteerDM] Navigating to messages');
-    const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
-    await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(randomDelay(1000, 2000));
-
-    // Check authentication
-    const loggedInIndicators = [
-      'a[data-testid="AppTabBar_Home_Link"]',
-      'a[aria-label="Home"]',
-      'nav[aria-label="Primary"]'
-    ];
-
-    let isLoggedIn = false;
-    for (const selector of loggedInIndicators) {
-      if (await page.$(selector) !== null) {
-        isLoggedIn = true;
-        break;
-      }
-    }
-
-    if (!isLoggedIn) {
-      throw new Error('Cookie authentication failed - cookies may be expired or invalid');
-    }
-
-    console.log('✅ [PuppeteerDM] Successfully authenticated');
-
-    // Send the DM - use paste for URL (natural behavior), skip navigation since we're already there
-    await sendSingleDM(page, message, {
-      usePaste: true,
-      minActionDelay: 1,
-      maxActionDelay: 2,
-      skipNavigation: true // Already navigated above
-    });
+      return { success: true };
+    }, username); // Pass username so browserManager uses correct proxy
 
     console.log(`✅ [PuppeteerDM] DM sent successfully from @${username}`);
 
     return {
-      success: true,
+      success: result.success,
       timestamp: new Date().toISOString()
     };
 
@@ -320,10 +237,5 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
       error: errorMessage,
       timestamp: new Date().toISOString()
     };
-
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
   }
 }

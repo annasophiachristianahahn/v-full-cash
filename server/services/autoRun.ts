@@ -209,16 +209,16 @@ class AutoRunService extends EventEmitter {
       if (unclassifiedCount > 0) {
         console.log(`[AutoRun] Waiting for ${unclassifiedCount} tweets to be classified...`);
 
-        // Poll for up to 60 seconds
-        for (let i = 0; i < 30; i++) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+        // Poll faster (500ms) for up to 30 seconds total
+        for (let i = 0; i < 60; i++) {
+          await new Promise(resolve => setTimeout(resolve, 500));
           allTweets = await storage.getTweetsBySearchId(search.id);
           const stillUnclassified = allTweets.filter(t => t.isBot === null).length;
 
           if (stillUnclassified === 0) {
             console.log(`[AutoRun] All tweets classified!`);
             break;
-          } else if (i === 29) {
+          } else if (i === 59) {
             console.log(`[AutoRun] Timeout waiting for classification, proceeding with ${stillUnclassified} unclassified`);
           }
         }
@@ -263,37 +263,51 @@ class AutoRunService extends EventEmitter {
         authorHandle: string;
       }> = [];
 
-      for (let i = 0; i < nonBotTweets.length; i++) {
+      // Generate replies in parallel batches for speed while respecting rate limits
+      const BATCH_SIZE = 5;
+      for (let batchStart = 0; batchStart < nonBotTweets.length; batchStart += BATCH_SIZE) {
         if (this.isCancelled) {
           this.updateState({ status: 'cancelled', currentStep: 'Cancelled by user' });
           return;
         }
 
         if (this.isPaused) {
-          this.updateState({ status: 'paused', currentStep: `Paused after generating ${i} replies` });
+          this.updateState({ status: 'paused', currentStep: `Paused after generating ${repliesData.length} replies` });
           return;
         }
 
-        const tweet = nonBotTweets[i];
-        
-        try {
-          const generatedReply = await this.openRouterService.generateReply(tweet.content, systemPrompt);
-          
-          repliesData.push({
-            tweetId: tweet.tweetId,
-            replyText: generatedReply,
-            username: config.username,
-            tweetUrl: tweet.url,
-            authorHandle: tweet.authorHandle
-          });
+        const batch = nonBotTweets.slice(batchStart, batchStart + BATCH_SIZE);
 
-          this.state.progress.repliesGenerated++;
-          this.updateState({
-            currentStep: `Generated reply ${i + 1}/${nonBotTweets.length}`
-          });
-        } catch (error) {
-          console.error(`Failed to generate reply for tweet ${tweet.tweetId}:`, error);
+        // Process batch in parallel
+        const batchPromises = batch.map(async (tweet) => {
+          try {
+            const generatedReply = await this.openRouterService.generateReply(tweet.content, systemPrompt);
+            return {
+              tweetId: tweet.tweetId,
+              replyText: generatedReply,
+              username: config.username,
+              tweetUrl: tweet.url,
+              authorHandle: tweet.authorHandle
+            };
+          } catch (error) {
+            console.error(`Failed to generate reply for tweet ${tweet.tweetId}:`, error);
+            return null;
+          }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+
+        // Add successful results
+        for (const result of batchResults) {
+          if (result) {
+            repliesData.push(result);
+            this.state.progress.repliesGenerated++;
+          }
         }
+
+        this.updateState({
+          currentStep: `Generated ${repliesData.length}/${nonBotTweets.length} replies`
+        });
       }
 
       if (repliesData.length === 0) {
@@ -311,9 +325,9 @@ class AutoRunService extends EventEmitter {
       });
 
       // PHASE 1: Queue primary replies with proper spacing to prevent concurrent execution
-      // Each reply needs ~60-90s to complete (browser start, nav, type, upload, post)
-      // We add the execution time estimate + random delay to ensure no overlap
-      const ESTIMATED_REPLY_TIME = 90; // seconds - conservative estimate for full reply cycle
+      // TwexAPI replies are fast (~5-15s) since they're API-based, not browser-based
+      // We add execution time estimate + random delay to ensure no overlap
+      const ESTIMATED_REPLY_TIME = 20; // seconds - TwexAPI is much faster than browser automation
       let cumulativeDelay = 0;
 
       const jobs = [];
@@ -492,7 +506,7 @@ class AutoRunService extends EventEmitter {
     }
 
     // Queue raid replies with proper spacing to prevent concurrent execution
-    const ESTIMATED_REPLY_TIME = 90; // seconds
+    const ESTIMATED_REPLY_TIME = 20; // seconds - TwexAPI is fast
     let cumulativeDelay = 0;
 
     const jobs = [];
