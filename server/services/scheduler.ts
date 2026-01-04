@@ -261,7 +261,7 @@ class SchedulerService {
           excludeRetweets: true,
           verifiedOnly: false
         },
-        maxTweets: 50,
+        maxTweets: Math.floor(Math.random() * (44 - 22 + 1)) + 22, // Random 22-44
         replyDelayRange: { min: 27, max: 47 },
         raidReplyDelayRange: { min: 44, max: 77 },
         dmDelayRange: { min: 7, max: 14 },
@@ -381,7 +381,7 @@ class SchedulerService {
         },
         cashtags,
         username: primaryAccount.username,
-        maxTweets: 50,
+        maxTweets: Math.floor(Math.random() * (44 - 22 + 1)) + 22, // Random 22-44
         replyDelayRange: { min: 27, max: 47 },
         raidReplyDelayRange: { min: 44, max: 77 },
         dmDelayRange: { min: 7, max: 14 },

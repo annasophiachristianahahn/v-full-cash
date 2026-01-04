@@ -85,7 +85,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auto-run/start", async (req, res) => {
     try {
-      const { maxTweets = 50, sendDm = true } = req.body;
+      const {
+        minTweetsPerRun = 22,
+        maxTweetsPerRun = 44,
+        sendDm = true
+      } = req.body;
+
+      // Randomize maxTweets per run between min and max
+      const maxTweets = Math.floor(Math.random() * (maxTweetsPerRun - minTweetsPerRun + 1)) + minTweetsPerRun;
 
       const storage = await getStorage();
       
@@ -178,6 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         - Cashtags (${cashtags.length}): ${cashtags.join(', ')}
         - Pinned count: ${pinnedRecommended.length + pinnedTrending.length}
         - Primary Account: @${primaryAccount.username} (randomly selected)
+        - Max Tweets This Run: ${maxTweets} (random from ${minTweetsPerRun}-${maxTweetsPerRun})
         - Raid Rounds: ${raidRounds}`);
 
       autoRunService.start({

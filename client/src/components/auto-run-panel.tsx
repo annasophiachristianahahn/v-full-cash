@@ -33,7 +33,27 @@ const defaultAutoRunState: AutoRunState = {
 export function AutoRunPanel({ selectedUsername }: AutoRunPanelProps) {
   const { toast } = useToast();
   const [sendDm, setSendDm] = useState(true);
-  const [maxTweets, setMaxTweets] = useState(50);
+
+  // Load from localStorage or use defaults
+  const [minTweetsPerRun, setMinTweetsPerRun] = useState(() => {
+    const saved = localStorage.getItem('minTweetsPerRun');
+    return saved ? Number(saved) : 22;
+  });
+  const [maxTweetsPerRun, setMaxTweetsPerRun] = useState(() => {
+    const saved = localStorage.getItem('maxTweetsPerRun');
+    return saved ? Number(saved) : 44;
+  });
+
+  // Save to localStorage when changed
+  const handleMinChange = (value: number) => {
+    setMinTweetsPerRun(value);
+    localStorage.setItem('minTweetsPerRun', String(value));
+  };
+
+  const handleMaxChange = (value: number) => {
+    setMaxTweetsPerRun(value);
+    localStorage.setItem('maxTweetsPerRun', String(value));
+  };
 
   const { autoRunState: sseAutoRunState } = useSSE();
   const autoRunState = sseAutoRunState || defaultAutoRunState;
@@ -41,7 +61,8 @@ export function AutoRunPanel({ selectedUsername }: AutoRunPanelProps) {
   const startMutation = useMutation({
     mutationFn: async () => {
       return await apiRequest("POST", "/api/auto-run/start", {
-        maxTweets,
+        minTweetsPerRun,
+        maxTweetsPerRun,
         sendDm
       });
     },
@@ -157,18 +178,37 @@ export function AutoRunPanel({ selectedUsername }: AutoRunPanelProps) {
       <CardContent className="space-y-4">
         {canStart && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="max-tweets">Max Tweets per Run</Label>
-              <Input
-                id="max-tweets"
-                type="number"
-                value={maxTweets}
-                onChange={(e) => setMaxTweets(Number(e.target.value))}
-                className="w-24"
-                min={1}
-                max={200}
-                data-testid="input-max-tweets"
-              />
+            <div className="space-y-2">
+              <Label>Tweets per Run (Random Range)</Label>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="min-tweets" className="text-xs text-muted-foreground">Min</Label>
+                  <Input
+                    id="min-tweets"
+                    type="number"
+                    value={minTweetsPerRun}
+                    onChange={(e) => handleMinChange(Number(e.target.value))}
+                    className="w-16 h-8 text-sm"
+                    min={1}
+                    max={maxTweetsPerRun}
+                    data-testid="input-min-tweets"
+                  />
+                </div>
+                <span className="text-muted-foreground">-</span>
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="max-tweets" className="text-xs text-muted-foreground">Max</Label>
+                  <Input
+                    id="max-tweets"
+                    type="number"
+                    value={maxTweetsPerRun}
+                    onChange={(e) => handleMaxChange(Number(e.target.value))}
+                    className="w-16 h-8 text-sm"
+                    min={minTweetsPerRun}
+                    max={200}
+                    data-testid="input-max-tweets"
+                  />
+                </div>
+              </div>
             </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="send-dm">Send DMs after replies</Label>
