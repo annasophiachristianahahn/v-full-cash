@@ -610,12 +610,12 @@ class AutoRunService extends EventEmitter {
 
               console.log(`[AutoRun] Raid completed by @${username}: ${replyUrl}`);
 
-              // 60% chance to like each previous raid reply
+              // 72% chance to like each previous raid reply
               if (this.state.completedRaidReplyUrls.length > 0) {
-                console.log(`[AutoRun] @${username} checking ${this.state.completedRaidReplyUrls.length} previous raids for cross-likes (60% chance each)`);
+                console.log(`[AutoRun] @${username} checking ${this.state.completedRaidReplyUrls.length} previous raids for cross-likes (72% chance each)`);
 
                 for (const previousRaidUrl of this.state.completedRaidReplyUrls) {
-                  if (Math.random() < 0.6) { // 60% chance
+                  if (Math.random() < 0.72) { // 72% chance
                     const likeDelay = Math.floor(Math.random() * 10) + 5; // 5-15 seconds
                     await replyQueue.queueLike({
                       tweetUrl: previousRaidUrl,
