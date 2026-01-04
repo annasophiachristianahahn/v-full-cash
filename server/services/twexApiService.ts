@@ -48,7 +48,7 @@ export class TwexApiService {
     username: string;
     twitterCookie: string;
     mediaUrl?: string;
-  }): Promise<{ success: boolean; replyId?: string; replyUrl?: string; error?: string }> {
+  }): Promise<{ success: boolean; replyId?: string; replyUrl?: string; proxy?: string; error?: string }> {
     try {
       // TwexAPI accepts the full cookie string
       const fullCookie = params.twitterCookie;
@@ -137,7 +137,8 @@ export class TwexApiService {
       return {
         success: true,
         replyId,
-        replyUrl
+        replyUrl,
+        proxy // Return the proxy that was used
       };
 
     } catch (error: any) {
@@ -318,6 +319,7 @@ export class TwexApiService {
     replySuccess: boolean;
     replyId?: string;
     replyUrl?: string;
+    proxy?: string;
     replyError?: string;
     likeSuccess: boolean;
     likeError?: string;
@@ -343,6 +345,7 @@ export class TwexApiService {
       replySuccess: replyResult.success,
       replyId: replyResult.replyId,
       replyUrl: replyResult.replyUrl,
+      proxy: replyResult.proxy, // Return the proxy that was used for the reply
       replyError: replyResult.error,
       likeSuccess: likeResult.success,
       likeError: likeResult.error

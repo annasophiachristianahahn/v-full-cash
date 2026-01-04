@@ -7,6 +7,7 @@ interface LikeJobData {
 import { getStorage } from '../storage';
 import { twitterAutomation } from './twitterAutomation';
 import { normalizeImageUrl } from '../utils/imageUrl';
+import { sendTwitterDM } from './puppeteerDM';
 
 interface QueuedReply {
   jobId: string;
@@ -204,13 +205,14 @@ class ReplyQueue {
       jobManager.completeJob(job.id, {
         replyId: result.replyId,
         replyUrl: result.replyUrl,
+        proxy: result.proxy, // Store the proxy that was used
         likeSuccess: likeResult?.success
       });
 
       console.log(`✅ [ReplyQueue] Reply posted successfully: ${result.replyUrl}`);
 
       if (data.sendDm && result.replyUrl) {
-        this.queueDm(result.replyUrl, data.dmDelaySeconds || 45, data.username);
+        this.queueDm(result.replyUrl, data.dmDelaySeconds || 45, data.username, result.proxy);
       }
 
       // Cooldown after each reply to avoid triggering anti-spam
@@ -230,11 +232,12 @@ class ReplyQueue {
     }
   }
 
-  async queueDm(replyUrl: string, delaySeconds: number, username: string): Promise<Job> {
+  async queueDm(replyUrl: string, delaySeconds: number, username: string, proxy?: string): Promise<Job> {
     const job = jobManager.createJob('dm', {
       message: replyUrl,
       delaySeconds,
-      username
+      username,
+      proxy // Store the proxy to use for the DM
     }, delaySeconds);
 
     return job;
@@ -284,8 +287,8 @@ class ReplyQueue {
   }
 
   private async processDm(job: Job): Promise<void> {
-    const data = job.data as DmJobData;
-    
+    const data = job.data as DmJobData & { proxy?: string };
+
     try {
       const storage = await getStorage();
       const settings = await storage.getTwitterSettingsByUsername(data.username);
@@ -295,12 +298,16 @@ class ReplyQueue {
       }
 
       console.log(`📤 [ReplyQueue] Sending DM from @${data.username} with reply URL: ${data.message}`);
+      if (data.proxy) {
+        console.log(`📤 [ReplyQueue] Using same proxy as reply: ${data.proxy.substring(0, 30)}...`);
+      }
 
-      const result = await twitterAutomation.sendDM({
-        recipientUsername: 'secretary_VAJ',  // Send to VAJ group
+      // Use Puppeteer DM service instead of TwexAPI
+      const result = await sendTwitterDM({
         message: data.message,
         twitterCookie: settings.twitterCookie,
-        username: data.username
+        username: data.username,
+        proxy: data.proxy // Use the same proxy that was used for the reply
       });
 
       if (!result.success) {
@@ -308,11 +315,11 @@ class ReplyQueue {
       }
 
       jobManager.completeJob(job.id, {
-        totalSent: result.totalSent,
-        messages: result.messages
+        success: true,
+        timestamp: result.timestamp
       });
 
-      console.log(`✅ [ReplyQueue] DM sent successfully`);
+      console.log(`✅ [ReplyQueue] DM sent successfully via Puppeteer`);
 
       // Cooldown after DM
       const cooldownMs = this.getRandomDelay(10000, 20000); // 10-20 seconds
@@ -323,7 +330,7 @@ class ReplyQueue {
       const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
       console.error(`❌ [ReplyQueue] Failed to send DM:`, errorMessage);
       jobManager.failJob(job.id, errorMessage || 'Unknown error');
-      
+
       // Cooldown even after failure to avoid rapid retries
       const cooldownMs = this.getRandomDelay(5000, 15000);
       await new Promise(resolve => setTimeout(resolve, cooldownMs));
