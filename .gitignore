@@ -15,3 +15,7 @@ vite.config.ts.*
 
 # Attached assets (contain API keys in text files)
 attached_assets/
+
+# Database backups (too large for git)
+*.sql
+neon_backup.sql

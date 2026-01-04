@@ -262,8 +262,9 @@ class SchedulerService {
           verifiedOnly: false
         },
         maxTweets: 50,
-        replyDelayRange: { min: 47, max: 88 },
-        dmDelayRange: { min: 30, max: 60 },
+        replyDelayRange: { min: 27, max: 47 },
+        raidReplyDelayRange: { min: 44, max: 77 },
+        dmDelayRange: { min: 7, max: 14 },
         sendDm: true
       };
 
@@ -275,6 +276,7 @@ class SchedulerService {
         username: config.primaryAccount,
         maxTweets: config.maxTweets,
         replyDelayRange: config.replyDelayRange,
+        raidReplyDelayRange: config.raidReplyDelayRange,
         dmDelayRange: config.dmDelayRange,
         sendDm: config.sendDm,
         raidRounds: config.raidRounds
@@ -380,8 +382,9 @@ class SchedulerService {
         cashtags,
         username: primaryAccount.username,
         maxTweets: 50,
-        replyDelayRange: { min: 47, max: 88 },
-        dmDelayRange: { min: 30, max: 60 },
+        replyDelayRange: { min: 27, max: 47 },
+        raidReplyDelayRange: { min: 44, max: 77 },
+        dmDelayRange: { min: 7, max: 14 },
         sendDm: true,
         raidRounds
       });

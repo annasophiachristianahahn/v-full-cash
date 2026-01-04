@@ -192,8 +192,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cashtags,
         username: primaryAccount.username,
         maxTweets,
-        replyDelayRange: { min: 47, max: 88 },
-        dmDelayRange: { min: 30, max: 60 },
+        replyDelayRange: { min: 27, max: 47 },
+        raidReplyDelayRange: { min: 44, max: 77 },
+        dmDelayRange: { min: 7, max: 14 },
         sendDm,
         raidRounds
       });
@@ -635,11 +636,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Queue bulk replies
   app.post("/api/queue/bulk-replies", async (req, res) => {
     try {
-      const { 
-        replies, 
-        sendDm = false, 
-        dmDelayRange = { min: 30, max: 60 },
-        replyDelayRange = { min: 47, max: 88 }
+      const {
+        replies,
+        sendDm = false,
+        dmDelayRange = { min: 7, max: 14 },
+        replyDelayRange = { min: 27, max: 47 }
       } = req.body;
 
       if (!replies || !Array.isArray(replies) || replies.length === 0) {

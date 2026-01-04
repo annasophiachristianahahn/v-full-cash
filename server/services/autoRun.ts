@@ -36,6 +36,7 @@ interface AutoRunConfig {
   username: string;
   maxTweets: number;
   replyDelayRange: { min: number; max: number };
+  raidReplyDelayRange?: { min: number; max: number }; // Optional: separate delay for raid replies (defaults to replyDelayRange)
   dmDelayRange: { min: number; max: number };
   sendDm: boolean;
   raidRounds?: number; // Number of raid reply rounds (2-4), defaults to 2
@@ -411,7 +412,7 @@ class AutoRunService extends EventEmitter {
               currentStep: `Raid round ${round}/${actualRaidRounds}: Generating replies from @${raidAccount.username}...`
             });
 
-            await this.sendRaidReplies(sentReplyUrls, raidAccount.username, systemPrompt, config.replyDelayRange, round);
+            await this.sendRaidReplies(sentReplyUrls, raidAccount.username, systemPrompt, config.raidReplyDelayRange || config.replyDelayRange, round);
           }
         } else {
           console.log(`[AutoRun] No other accounts available for raid replies`);

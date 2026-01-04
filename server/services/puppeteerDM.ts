@@ -71,22 +71,25 @@ async function sendSingleDM(
   page: Page,
   message: string,
   options: {
-    minTypingDelay?: number;
-    maxTypingDelay?: number;
+    usePaste?: boolean;
     minActionDelay?: number;
     maxActionDelay?: number;
+    skipNavigation?: boolean; // If already on messages page
   } = {}
 ): Promise<void> {
   const {
-    minTypingDelay = 50,
-    maxTypingDelay = 150,
+    usePaste = true, // Default to paste for URLs (natural behavior)
     minActionDelay = 1,
-    maxActionDelay = 3
+    maxActionDelay = 2,
+    skipNavigation = false
   } = options;
 
-  const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
-  await page.goto(messagesUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-  await sleep(randomDelay(2000, 4000));
+  // Only navigate if not already on the page
+  if (!skipNavigation) {
+    const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
+    await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(randomDelay(1500, 2500));
+  }
 
   const messageInputSelectors = [
     'div[data-testid="dmComposerTextInput"]',
@@ -108,10 +111,30 @@ async function sendSingleDM(
   }
 
   await sleep(randomDelay(minActionDelay * 1000, maxActionDelay * 1000));
-  await humanTypeText(page, usedSelector, message, minTypingDelay, maxTypingDelay);
 
-  // Wait longer after typing to let Twitter enable the send button
-  await sleep(randomDelay(3000, 5000));
+  // Use paste for URLs (natural human behavior) or type for custom messages
+  if (usePaste) {
+    await page.click(usedSelector);
+    await sleep(randomDelay(200, 500));
+    // Simulate paste: Ctrl+V on Windows/Linux, Cmd+V on Mac
+    await page.keyboard.down('Control');
+    await page.keyboard.press('KeyV');
+    await page.keyboard.up('Control');
+    // Actually insert the text via clipboard
+    await page.evaluate((selector, text) => {
+      const el = document.querySelector(selector);
+      if (el) {
+        (el as HTMLElement).focus();
+        document.execCommand('insertText', false, text);
+      }
+    }, usedSelector, message);
+    await sleep(randomDelay(500, 1000));
+  } else {
+    await humanTypeText(page, usedSelector, message, 50, 150);
+  }
+
+  // Shorter wait after paste - Twitter detects paste faster than typing
+  await sleep(randomDelay(1500, 2500));
 
   const sendButtonSelectors = [
     'button[data-testid="dmComposerSendButton"]',
@@ -158,7 +181,7 @@ async function sendSingleDM(
   }
 
   await page.click(sendSelector);
-  await sleep(randomDelay(2000, 4000));
+  await sleep(randomDelay(500, 1000)); // Reduced - just confirm click registered
 }
 
 export interface SendDMParams {
@@ -242,14 +265,15 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
     });
 
-    console.log('📤 [PuppeteerDM] Navigating to X/Twitter');
-    await page.goto('https://x.com', { waitUntil: 'networkidle2', timeout: 30000 });
+    // Set cookies before navigating (faster than reload)
+    console.log('📤 [PuppeteerDM] Setting up authentication');
     await setCookies(page, twitterCookie);
-    await sleep(randomDelay(1000, 3000));
 
-    console.log('📤 [PuppeteerDM] Reloading page with cookies');
-    await page.goto('https://x.com', { waitUntil: 'networkidle2', timeout: 30000 });
-    await sleep(randomDelay(2000, 4000));
+    // Go directly to messages (skip home page)
+    console.log('📤 [PuppeteerDM] Navigating to messages');
+    const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
+    await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(randomDelay(1000, 2000));
 
     // Check authentication
     const loggedInIndicators = [
@@ -272,12 +296,12 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
 
     console.log('✅ [PuppeteerDM] Successfully authenticated');
 
-    // Send the DM
+    // Send the DM - use paste for URL (natural behavior), skip navigation since we're already there
     await sendSingleDM(page, message, {
-      minTypingDelay: 50,
-      maxTypingDelay: 150,
+      usePaste: true,
       minActionDelay: 1,
-      maxActionDelay: 3
+      maxActionDelay: 2,
+      skipNavigation: true // Already navigated above
     });
 
     console.log(`✅ [PuppeteerDM] DM sent successfully from @${username}`);

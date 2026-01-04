@@ -1,4 +1,5 @@
 import { jobManager, Job, ReplyJobData, DmJobData, JobType } from './jobManager';
+import { accountQueueManager } from './accountQueue';
 
 interface LikeJobData {
   tweetUrl: string;
@@ -30,16 +31,34 @@ class ReplyQueue {
   }
 
   private setupListeners() {
+    // Jobs are queued per-account for sequential processing
     jobManager.on('job:started', (job: Job) => {
-      // Don't await - let jobs process in parallel to avoid blocking
-      if (job.type === 'reply') {
-        this.processReply(job);
-      } else if (job.type === 'dm') {
-        this.processDm(job);
-      } else if (job.type === 'like') {
-        this.processLike(job);
+      const data = job.data as ReplyJobData | DmJobData | LikeJobData;
+
+      // Queue the job for the account - will be processed sequentially per account
+      if (data.username) {
+        accountQueueManager.enqueueJob(data.username, job);
+      } else {
+        // Fallback for jobs without username (shouldn't happen)
+        console.warn(`[ReplyQueue] Job ${job.id} has no username, processing immediately`);
+        this.processJobByType(job);
       }
     });
+
+    // Process jobs as they come out of the account queue
+    accountQueueManager.on('process-job', (job: Job, username: string) => {
+      this.processJobByType(job, username);
+    });
+  }
+
+  private processJobByType(job: Job, username?: string): void {
+    if (job.type === 'reply') {
+      this.processReply(job, username);
+    } else if (job.type === 'dm') {
+      this.processDm(job, username);
+    } else if (job.type === 'like') {
+      this.processLike(job, username);
+    }
   }
 
   async queueReply(data: {
@@ -121,8 +140,9 @@ class ReplyQueue {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  private async processReply(job: Job): Promise<void> {
+  private async processReply(job: Job, username?: string): Promise<void> {
     const data = job.data as ReplyJobData & { sendDm: boolean; dmDelaySeconds: number; alsoLikeTweet?: boolean };
+    const accountUsername = username || data.username;
     
     try {
       const storage = await getStorage();
@@ -217,7 +237,7 @@ class ReplyQueue {
       }
 
       // Cooldown after each reply to avoid triggering anti-spam
-      const cooldownMs = this.getRandomDelay(10000, 30000); // 10-30 seconds
+      const cooldownMs = this.getRandomDelay(8000, 20000); // 8-20 seconds
       console.log(`⏳ [ReplyQueue] Cooldown: ${Math.round(cooldownMs / 1000)}s before next action`);
       await new Promise(resolve => setTimeout(resolve, cooldownMs));
 
@@ -225,11 +245,16 @@ class ReplyQueue {
       const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
       console.error(`❌ [ReplyQueue] Failed to post reply:`, errorMessage);
       jobManager.failJob(job.id, errorMessage || 'Unknown error');
-      
+
       // Cooldown even after failure to avoid rapid retries triggering anti-spam
       const cooldownMs = this.getRandomDelay(15000, 45000); // 15-45 seconds after failure
       console.log(`⏳ [ReplyQueue] Failure cooldown: ${Math.round(cooldownMs / 1000)}s`);
       await new Promise(resolve => setTimeout(resolve, cooldownMs));
+    } finally {
+      // Mark job complete in account queue so next job can process
+      if (accountUsername) {
+        accountQueueManager.completeJob(accountUsername, job.id);
+      }
     }
   }
 
@@ -254,8 +279,9 @@ class ReplyQueue {
     return job;
   }
 
-  private async processLike(job: Job): Promise<void> {
+  private async processLike(job: Job, username?: string): Promise<void> {
     const data = job.data as LikeJobData;
+    const accountUsername = username || data.username;
 
     try {
       const storage = await getStorage();
@@ -284,11 +310,17 @@ class ReplyQueue {
       const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
       console.error(`❌ [ReplyQueue] Failed to like tweet:`, errorMessage);
       jobManager.failJob(job.id, errorMessage || 'Unknown error');
+    } finally {
+      // Mark job complete in account queue so next job can process
+      if (accountUsername) {
+        accountQueueManager.completeJob(accountUsername, job.id);
+      }
     }
   }
 
-  private async processDm(job: Job): Promise<void> {
+  private async processDm(job: Job, username?: string): Promise<void> {
     const data = job.data as DmJobData & { proxy?: string };
+    const accountUsername = username || data.username;
 
     try {
       const storage = await getStorage();
@@ -322,19 +354,19 @@ class ReplyQueue {
 
       console.log(`✅ [ReplyQueue] DM sent successfully via Puppeteer`);
 
-      // Cooldown after DM
-      const cooldownMs = this.getRandomDelay(10000, 20000); // 10-20 seconds
-      console.log(`⏳ [ReplyQueue] DM cooldown: ${Math.round(cooldownMs / 1000)}s`);
-      await new Promise(resolve => setTimeout(resolve, cooldownMs));
+      // No cooldown needed - next job has its own randomized delay
 
     } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
       console.error(`❌ [ReplyQueue] Failed to send DM:`, errorMessage);
       jobManager.failJob(job.id, errorMessage || 'Unknown error');
 
-      // Cooldown even after failure to avoid rapid retries
-      const cooldownMs = this.getRandomDelay(5000, 15000);
-      await new Promise(resolve => setTimeout(resolve, cooldownMs));
+      // No cooldown needed - failures are already rare and next job has its own delay
+    } finally {
+      // Mark job complete in account queue so next job can process
+      if (accountUsername) {
+        accountQueueManager.completeJob(accountUsername, job.id);
+      }
     }
   }
 
