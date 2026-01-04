@@ -174,6 +174,7 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
 
     const launchOptions: any = {
       headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -187,11 +188,33 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
 
     // Add proxy if provided
     if (proxy) {
-      launchOptions.args.push(`--proxy-server=${proxy}`);
+      // Extract host:port from proxy URL (format: http://user:pass@host:port)
+      const proxyHostMatch = proxy.match(/@([^:]+):(\d+)/);
+      if (proxyHostMatch) {
+        const [, host, port] = proxyHostMatch;
+        launchOptions.args.push(`--proxy-server=${host}:${port}`);
+      } else {
+        // Fallback: use proxy as-is if format doesn't match
+        launchOptions.args.push(`--proxy-server=${proxy}`);
+      }
     }
 
     browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
+
+    // Handle proxy authentication if proxy is provided
+    if (proxy) {
+      // Extract credentials from proxy URL (format: http://user:pass@host:port)
+      const proxyMatch = proxy.match(/http:\/\/([^:]+):([^@]+)@/);
+      if (proxyMatch) {
+        const [, proxyUsername, proxyPassword] = proxyMatch;
+        await page.authenticate({
+          username: proxyUsername,
+          password: proxyPassword
+        });
+        console.log('📤 [PuppeteerDM] Proxy authentication configured');
+      }
+    }
 
     await page.setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
