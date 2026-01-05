@@ -151,12 +151,14 @@ class ReplyQueue {
           : 0;
 
         // Create reply job synchronously and enqueue directly (no timer)
+        console.log(`📋 [ReplyQueue] Creating reply job with sendDm=${options.sendDm}`);
         const replyJob = jobManager.createJobSync('reply', {
           ...reply,
           sendDm: options.sendDm,
           dmDelaySeconds: dmDelay,
           alsoLikeTweet: false
         });
+        console.log(`📋 [ReplyQueue] Created job ${replyJob.id}, job.data.sendDm=${replyJob.data.sendDm}`);
 
         // Directly enqueue to account queue (sequential processing)
         accountQueueManager.enqueueJob(username, replyJob);
@@ -274,8 +276,12 @@ class ReplyQueue {
       // Queue DM BEFORE marking reply complete - ensures DM is next in account queue
       // Use sync version to guarantee DM is queued before completeJob triggers processNext
       // Note: DM delay (7-14s) is handled by accountQueueManager based on job type
+      console.log(`📨 [ReplyQueue] DM check: sendDm=${data.sendDm}, replyUrl=${result.replyUrl ? 'yes' : 'no'}`);
       if (data.sendDm && result.replyUrl) {
+        console.log(`📨 [ReplyQueue] Queueing DM for @${data.username}`);
         this.queueDmSync(result.replyUrl, data.username, result.proxy);
+      } else {
+        console.log(`📨 [ReplyQueue] Skipping DM: sendDm=${data.sendDm}, hasReplyUrl=${!!result.replyUrl}`);
       }
 
       jobManager.completeJob(job.id, {
