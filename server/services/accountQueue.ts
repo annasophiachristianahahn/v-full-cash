@@ -35,10 +35,20 @@ class AccountQueueManager extends EventEmitter {
   // Map of username -> timestamp of last job completion (for humanization delays)
   private lastCompletionTimes: Map<string, number> = new Map();
 
+  // Track all enqueued job IDs to prevent double-enqueueing
+  private enqueuedJobIds: Set<string> = new Set();
+
   /**
    * Add a job to an account's queue
    */
   enqueueJob(username: string, job: Job): void {
+    // Prevent double-enqueueing the same job
+    if (this.enqueuedJobIds.has(job.id)) {
+      console.warn(`[AccountQueue] Job ${job.id} already enqueued, skipping duplicate`);
+      return;
+    }
+    this.enqueuedJobIds.add(job.id);
+
     if (!this.accountQueues.has(username)) {
       this.accountQueues.set(username, []);
     }
@@ -111,6 +121,7 @@ class AccountQueueManager extends EventEmitter {
 
     if (currentJobId === jobId) {
       this.processingJobs.delete(username);
+      this.enqueuedJobIds.delete(jobId); // Clean up to prevent memory growth
       this.lastCompletionTimes.set(username, Date.now()); // Track completion time for humanization
       const queue = this.accountQueues.get(username);
       const queueSize = queue ? queue.length : 0;

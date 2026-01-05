@@ -32,8 +32,17 @@ class ReplyQueue {
 
   private setupListeners() {
     // Jobs are queued per-account for sequential processing
+    // NOTE: This listener handles jobs from queueReply (timer-based) and queueLike
+    // Jobs from queueBulkReplies and queueDmSync are directly enqueued, NOT via this listener
     jobManager.on('job:started', (job: Job) => {
       const data = job.data as ReplyJobData | DmJobData | LikeJobData;
+
+      // Skip if job is already queued (from createJobSync + direct enqueue)
+      // This prevents double-enqueueing for jobs that bypass the event system
+      if (job.status === 'queued') {
+        console.log(`[ReplyQueue] Job ${job.id} already queued, skipping event-based enqueue`);
+        return;
+      }
 
       // Queue the job for the account - will be processed sequentially per account
       if (data.username) {
