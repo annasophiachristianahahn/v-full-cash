@@ -7,6 +7,30 @@ import { proxyManager } from './proxyManager';
 
 const TWEXAPI_BASE_URL = 'https://api.twexapi.io';
 const TWEXAPI_TOKEN = process.env.TWEXAPI_TOKEN || 'twitterx_23c263ed5aa668f7097c6220bdc95ce2eb028397a2d7cc92';
+const FETCH_TIMEOUT_MS = 60000; // 60 second timeout for API calls
+
+/**
+ * Fetch with timeout - prevents indefinite hangs if TwexAPI is slow/unresponsive
+ */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw new Error(`TwexAPI request timed out after ${timeoutMs / 1000}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 interface TwexApiResponse {
   code: number;
@@ -84,7 +108,7 @@ export class TwexApiService {
         proxy: proxy ? `${proxy.substring(0, 30)}...` : undefined
       }, null, 2));
 
-      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/tweets/create`, {
+      const response = await fetchWithTimeout(`${TWEXAPI_BASE_URL}/twitter/tweets/create`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
@@ -187,7 +211,7 @@ export class TwexApiService {
         proxy: proxy ? `${proxy.substring(0, 30)}...` : undefined
       }, null, 2));
 
-      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/like`, {
+      const response = await fetchWithTimeout(`${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/like`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
@@ -269,7 +293,7 @@ export class TwexApiService {
         proxy: proxy ? `${proxy.substring(0, 30)}...` : undefined
       }, null, 2));
 
-      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/send-dm`, {
+      const response = await fetchWithTimeout(`${TWEXAPI_BASE_URL}/twitter/send-dm`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
@@ -383,7 +407,7 @@ export class TwexApiService {
       console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/following`);
       console.log(`[TwexAPI] Getting following list for @${params.username}`);
 
-      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/following`, {
+      const response = await fetchWithTimeout(`${TWEXAPI_BASE_URL}/twitter/following`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
@@ -456,7 +480,7 @@ export class TwexApiService {
       console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/advanced_search`);
       console.log(`[TwexAPI] Search terms: ${params.searchTerms.join(', ')}`);
 
-      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/advanced_search`, {
+      const response = await fetchWithTimeout(`${TWEXAPI_BASE_URL}/twitter/advanced_search`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
@@ -525,7 +549,7 @@ export class TwexApiService {
       console.log(`[TwexAPI] URL: ${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/retweet`);
       console.log(`[TwexAPI] Method: POST`);
 
-      const response = await fetch(`${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/retweet`, {
+      const response = await fetchWithTimeout(`${TWEXAPI_BASE_URL}/twitter/tweets/${params.tweetId}/retweet`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${TWEXAPI_TOKEN}`,
