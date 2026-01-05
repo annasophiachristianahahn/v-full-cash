@@ -259,16 +259,18 @@ class ReplyQueue {
   }
 
   async queueDm(replyUrl: string, delaySeconds: number, username: string, proxy?: string): Promise<Job> {
-    console.log(`📨 [ReplyQueue] Creating DM job for @${username} with ${delaySeconds}s delay, replyUrl: ${replyUrl}`);
+    console.log(`📨 [ReplyQueue] Creating DM job for @${username} (internal delay: ${delaySeconds}s), replyUrl: ${replyUrl}`);
 
+    // Create job with NO external timer (delay=0) - the delay is handled internally during processing
+    // This ensures DM runs immediately after its parent reply in the account queue
     const job = jobManager.createJob('dm', {
       message: replyUrl,
-      delaySeconds,
+      internalDelaySeconds: delaySeconds, // Store delay for internal use during processing
       username,
       proxy // Store the proxy to use for the DM
-    }, delaySeconds);
+    }, 0); // No external timer - queue immediately
 
-    console.log(`📨 [ReplyQueue] DM job ${job.id} created with status: ${job.status}`);
+    console.log(`📨 [ReplyQueue] DM job ${job.id} created with status: ${job.status} (will wait ${delaySeconds}s internally before sending)`);
     return job;
   }
 
@@ -322,7 +324,7 @@ class ReplyQueue {
   }
 
   private async processDm(job: Job, username?: string): Promise<void> {
-    const data = job.data as DmJobData & { proxy?: string };
+    const data = job.data as DmJobData & { proxy?: string; internalDelaySeconds?: number };
     const accountUsername = username || data.username;
 
     try {
@@ -331,6 +333,13 @@ class ReplyQueue {
 
       if (!settings || !settings.twitterCookie) {
         throw new Error(`No Twitter cookie configured for user: ${data.username}`);
+      }
+
+      // Handle internal delay (humanization between reply and DM)
+      const internalDelay = data.internalDelaySeconds || 0;
+      if (internalDelay > 0) {
+        console.log(`⏳ [ReplyQueue] Waiting ${internalDelay}s before sending DM (humanization delay)`);
+        await new Promise(resolve => setTimeout(resolve, internalDelay * 1000));
       }
 
       console.log(`📤 [ReplyQueue] Sending DM from @${data.username} with reply URL: ${data.message}`);
