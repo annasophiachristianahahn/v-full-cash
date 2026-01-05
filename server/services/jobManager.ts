@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 
 export type JobType = 'reply' | 'dm' | 'search' | 'bulk_reply' | 'like';
-export type JobStatus = 'pending' | 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type JobStatus = 'pending' | 'scheduled' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface Job {
   id: string;
@@ -109,9 +109,19 @@ class JobManager extends EventEmitter {
     const job = this.jobs.get(jobId);
     if (!job) return;
 
+    // Set to 'queued' - accountQueueManager will set to 'running' when actually processing
+    job.status = 'queued';
+    this.emit('job:started', job);
+    this.emitStateChange();
+  }
+
+  // Called by accountQueueManager when job actually starts processing
+  markJobRunning(jobId: string): void {
+    const job = this.jobs.get(jobId);
+    if (!job) return;
+
     job.status = 'running';
     job.startedAt = new Date();
-    this.emit('job:started', job);
     this.emitStateChange();
   }
 
@@ -183,7 +193,7 @@ class JobManager extends EventEmitter {
 
   getActiveJobs(): Job[] {
     return Array.from(this.jobs.values()).filter(
-      job => job.status === 'pending' || job.status === 'scheduled' || job.status === 'running'
+      job => job.status === 'pending' || job.status === 'scheduled' || job.status === 'queued' || job.status === 'running'
     );
   }
 
@@ -209,14 +219,16 @@ class JobManager extends EventEmitter {
     jobs: Job[];
     activeCount: number;
     scheduledCount: number;
+    queuedCount: number;
     runningCount: number;
     completedCount: number;
   } {
     const jobs = this.getAllJobs();
     return {
       jobs,
-      activeCount: jobs.filter(j => ['pending', 'scheduled', 'running'].includes(j.status)).length,
+      activeCount: jobs.filter(j => ['pending', 'scheduled', 'queued', 'running'].includes(j.status)).length,
       scheduledCount: jobs.filter(j => j.status === 'scheduled').length,
+      queuedCount: jobs.filter(j => j.status === 'queued').length,
       runningCount: jobs.filter(j => j.status === 'running').length,
       completedCount: jobs.filter(j => j.status === 'completed').length,
     };
@@ -237,6 +249,7 @@ class JobManager extends EventEmitter {
         total: jobs.length,
         pending: jobs.filter(j => j.status === 'pending').length,
         scheduled: jobs.filter(j => j.status === 'scheduled').length,
+        queued: jobs.filter(j => j.status === 'queued').length,
         running: jobs.filter(j => j.status === 'running').length,
         completed: jobs.filter(j => j.status === 'completed').length,
         failed: jobs.filter(j => j.status === 'failed').length,

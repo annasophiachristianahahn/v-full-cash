@@ -1,5 +1,15 @@
 import { EventEmitter } from 'events';
-import { Job } from './jobManager';
+import { Job, jobManager } from './jobManager';
+
+// Minimum delay between jobs to maintain human-like behavior
+// even when jobs pile up due to slow processing
+// These match the cooldown delays in replyQueue (3-8s success, 8-20s failure)
+// We use a middle ground since we don't know if the previous job succeeded or failed
+const MIN_INTER_JOB_DELAY_MS = 5000;  // 5 seconds minimum between jobs
+const MAX_INTER_JOB_DELAY_MS = 12000; // 12 seconds maximum
+
+const randomDelay = (min: number, max: number): number =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
 
 /**
  * Per-Account Job Queue
@@ -19,6 +29,9 @@ class AccountQueueManager extends EventEmitter {
 
   // Map of username -> currently processing job ID
   private processingJobs: Map<string, string> = new Map();
+
+  // Map of username -> timestamp of last job completion (for humanization delays)
+  private lastCompletionTimes: Map<string, number> = new Map();
 
   /**
    * Add a job to an account's queue
@@ -41,8 +54,9 @@ class AccountQueueManager extends EventEmitter {
 
   /**
    * Process the next job for a specific account
+   * Adds humanization delay to maintain natural-looking timing even when jobs pile up
    */
-  private processNextForAccount(username: string): void {
+  private async processNextForAccount(username: string): Promise<void> {
     const queue = this.accountQueues.get(username);
     if (!queue || queue.length === 0) {
       return;
@@ -56,7 +70,24 @@ class AccountQueueManager extends EventEmitter {
     const job = queue.shift()!;
     this.processingJobs.set(username, job.id);
 
+    // Check if there are more jobs waiting - if so, add humanization delay
+    // This prevents rapid-fire execution when jobs pile up due to slow processing
+    const lastCompletionTime = this.lastCompletionTimes.get(username);
+    if (lastCompletionTime) {
+      const timeSinceLastJob = Date.now() - lastCompletionTime;
+      if (timeSinceLastJob < MIN_INTER_JOB_DELAY_MS) {
+        const remainingDelay = randomDelay(MIN_INTER_JOB_DELAY_MS, MAX_INTER_JOB_DELAY_MS) - timeSinceLastJob;
+        if (remainingDelay > 0) {
+          console.log(`[AccountQueue] Humanization delay: waiting ${Math.round(remainingDelay / 1000)}s before next job for @${username}`);
+          await new Promise(resolve => setTimeout(resolve, remainingDelay));
+        }
+      }
+    }
+
     console.log(`[AccountQueue] Starting ${job.type} job ${job.id} for @${username} (${queue.length} remaining in queue)`);
+
+    // Mark job as actually running now (not just queued)
+    jobManager.markJobRunning(job.id);
 
     // Emit event to start processing
     this.emit('process-job', job, username);
@@ -70,6 +101,7 @@ class AccountQueueManager extends EventEmitter {
 
     if (currentJobId === jobId) {
       this.processingJobs.delete(username);
+      this.lastCompletionTimes.set(username, Date.now()); // Track completion time for humanization
       console.log(`[AccountQueue] Completed job ${jobId} for @${username}`);
 
       // Process next job for this account
