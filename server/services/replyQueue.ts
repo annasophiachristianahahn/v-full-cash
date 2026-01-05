@@ -226,8 +226,9 @@ class ReplyQueue {
       console.log(`✅ [ReplyQueue] Reply posted successfully: ${result.replyUrl}`);
 
       // Queue DM BEFORE marking reply complete - ensures DM is next in account queue
+      // Use sync version to guarantee DM is queued before completeJob triggers processNext
       if (data.sendDm && result.replyUrl) {
-        await this.queueDm(result.replyUrl, data.dmDelaySeconds || 45, data.username, result.proxy);
+        this.queueDmSync(result.replyUrl, data.dmDelaySeconds || 45, data.username, result.proxy);
       }
 
       jobManager.completeJob(job.id, {
@@ -260,23 +261,22 @@ class ReplyQueue {
     }
   }
 
-  async queueDm(replyUrl: string, delaySeconds: number, username: string, proxy?: string): Promise<Job> {
+  queueDmSync(replyUrl: string, delaySeconds: number, username: string, proxy?: string): Job {
     console.log(`📨 [ReplyQueue] Creating DM job for @${username} (internal delay: ${delaySeconds}s), replyUrl: ${replyUrl}`);
 
-    // Create job with NO external timer (delay=0) - the delay is handled internally during processing
-    // This ensures DM runs immediately after its parent reply in the account queue
-    const job = jobManager.createJob('dm', {
+    // Create job directly without going through the async event system
+    // This ensures the DM is in the queue BEFORE completeJob triggers processNext
+    const job = jobManager.createJobSync('dm', {
       message: replyUrl,
-      internalDelaySeconds: delaySeconds, // Store delay for internal use during processing
+      internalDelaySeconds: delaySeconds,
       username,
-      proxy // Store the proxy to use for the DM
-    }, 0); // No external timer - queue immediately
+      proxy
+    });
 
-    // CRITICAL: Wait for setImmediate to fire so job is actually enqueued
-    // before we return. Otherwise the DM gets queued AFTER completeJob runs.
-    await new Promise(resolve => setImmediate(resolve));
+    // Directly enqueue to account queue (bypass the event listener)
+    accountQueueManager.enqueueJob(username, job);
 
-    console.log(`📨 [ReplyQueue] DM job ${job.id} enqueued with status: ${job.status} (will wait ${delaySeconds}s internally before sending)`);
+    console.log(`📨 [ReplyQueue] DM job ${job.id} directly enqueued (will wait ${delaySeconds}s internally before sending)`);
     return job;
   }
 

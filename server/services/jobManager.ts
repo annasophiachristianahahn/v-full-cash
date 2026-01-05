@@ -63,7 +63,7 @@ class JobManager extends EventEmitter {
   createJob(type: JobType, data: any, delaySeconds: number = 0): Job {
     const id = randomUUID();
     const now = new Date();
-    
+
     const job: Job = {
       id,
       type,
@@ -82,6 +82,26 @@ class JobManager extends EventEmitter {
       setImmediate(() => this.executeJob(id));
     }
 
+    return job;
+  }
+
+  // Synchronous job creation - for cases where we need to directly enqueue
+  // without going through the async event system (e.g., DMs after replies)
+  createJobSync(type: JobType, data: any): Job {
+    const id = randomUUID();
+
+    const job: Job = {
+      id,
+      type,
+      status: 'queued', // Already queued, will be set to running by accountQueueManager
+      data,
+    };
+
+    this.jobs.set(id, job);
+    this.emit('job:created', job);
+    this.emitStateChange();
+
+    // Don't emit job:started or call executeJob - caller will handle enqueueing
     return job;
   }
 
