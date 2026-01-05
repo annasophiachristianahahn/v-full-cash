@@ -7,8 +7,8 @@ const DM_MIN_DELAY_MS = 7000;   // 7 seconds before DM
 const DM_MAX_DELAY_MS = 14000;  // 14 seconds before DM
 
 // Reply requires finding/reading next tweet (longer delay)
-const REPLY_MIN_DELAY_MS = 20000;  // 20 seconds before next reply
-const REPLY_MAX_DELAY_MS = 33000;  // 33 seconds before next reply
+const REPLY_MIN_DELAY_MS = 33000;  // 33 seconds before next reply
+const REPLY_MAX_DELAY_MS = 77000;  // 77 seconds before next reply
 
 const randomDelay = (min: number, max: number): number =>
   Math.floor(Math.random() * (max - min + 1)) + min;
