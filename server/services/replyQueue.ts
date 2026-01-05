@@ -272,7 +272,11 @@ class ReplyQueue {
       proxy // Store the proxy to use for the DM
     }, 0); // No external timer - queue immediately
 
-    console.log(`📨 [ReplyQueue] DM job ${job.id} created with status: ${job.status} (will wait ${delaySeconds}s internally before sending)`);
+    // CRITICAL: Wait for setImmediate to fire so job is actually enqueued
+    // before we return. Otherwise the DM gets queued AFTER completeJob runs.
+    await new Promise(resolve => setImmediate(resolve));
+
+    console.log(`📨 [ReplyQueue] DM job ${job.id} enqueued with status: ${job.status} (will wait ${delaySeconds}s internally before sending)`);
     return job;
   }
 
