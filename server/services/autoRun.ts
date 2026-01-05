@@ -324,39 +324,24 @@ class AutoRunService extends EventEmitter {
         currentStep: `Queuing ${repliesData.length} replies...`
       });
 
-      // PHASE 1: Queue primary replies with proper spacing to prevent concurrent execution
-      // TwexAPI replies are fast (~5-15s) since they're API-based, not browser-based
-      // We add execution time estimate + random delay to ensure no overlap
-      const ESTIMATED_REPLY_TIME = 20; // seconds - TwexAPI is much faster than browser automation
-      let cumulativeDelay = 0;
-
-      const jobs = [];
-      for (let i = 0; i < repliesData.length; i++) {
-        const reply = repliesData[i];
-
-        // First reply executes immediately, subsequent ones wait for:
-        // - Previous reply to complete (ESTIMATED_REPLY_TIME)
-        // - Random human-like delay (replyDelayRange)
-        if (i > 0) {
-          const randomDelay = this.getRandomDelay(config.replyDelayRange.min, config.replyDelayRange.max);
-          cumulativeDelay += ESTIMATED_REPLY_TIME + randomDelay;
-          console.log(`[AutoRun] Reply ${i + 1} scheduled for +${cumulativeDelay}s (${ESTIMATED_REPLY_TIME}s exec + ${randomDelay}s delay)`);
-        }
-
-        const job = await replyQueue.queueReply({
+      // PHASE 1: Queue primary replies using unified sequential scheduling
+      // All replies are enqueued directly to accountQueueManager - no timers
+      // Sequence: Reply1 -> DM1 -> Reply2 -> DM2 -> etc.
+      // Timing handled by accountQueueManager (7-14s before DM, 20-33s before next reply)
+      const jobs = await replyQueue.queueBulkReplies(
+        repliesData.map(reply => ({
           tweetId: reply.tweetId,
           replyText: reply.replyText,
           username: reply.username,
           tweetUrl: reply.tweetUrl,
-          authorHandle: reply.authorHandle,
-          delaySeconds: cumulativeDelay,
+          authorHandle: reply.authorHandle
+        })),
+        {
           sendDm: config.sendDm,
-          dmDelaySeconds: config.sendDm ? this.getRandomDelay(config.dmDelayRange.min, config.dmDelayRange.max) : 0,
-          alsoLikeTweet: true
-        });
-
-        jobs.push(job);
-      }
+          dmDelayRange: config.dmDelayRange,
+          replyDelayRange: config.replyDelayRange
+        }
+      );
 
       this.state.replyJobIds = jobs.map(j => j.id);
       this.updateState({
@@ -505,28 +490,15 @@ class AutoRunService extends EventEmitter {
       return;
     }
 
-    // Queue raid replies with proper spacing to prevent concurrent execution
-    const ESTIMATED_REPLY_TIME = 20; // seconds - TwexAPI is fast
-    let cumulativeDelay = 0;
-
-    const jobs = [];
-    for (let i = 0; i < raidRepliesData.length; i++) {
-      if (i > 0) {
-        const randomDelay = this.getRandomDelay(replyDelayRange.min, replyDelayRange.max);
-        cumulativeDelay += ESTIMATED_REPLY_TIME + randomDelay;
-        console.log(`[AutoRun] Raid reply ${i + 1} scheduled for +${cumulativeDelay}s`);
-      }
-
-      const job = await replyQueue.queueReply({
-        ...raidRepliesData[i],
-        delaySeconds: cumulativeDelay,
+    // Queue raid replies using unified sequential scheduling (no DMs for raid replies)
+    const jobs = await replyQueue.queueBulkReplies(
+      raidRepliesData,
+      {
         sendDm: false,
-        dmDelaySeconds: 0,
-        alsoLikeTweet: true
-      });
-
-      jobs.push(job);
-    }
+        dmDelayRange: { min: 0, max: 0 },
+        replyDelayRange: replyDelayRange
+      }
+    );
 
     // Add to raid job tracking
     this.state.raidReplyJobIds.push(...jobs.map(j => j.id));
