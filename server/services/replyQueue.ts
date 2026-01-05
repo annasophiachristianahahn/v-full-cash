@@ -223,18 +223,19 @@ class ReplyQueue {
 
       await storage.updateTwitterSettingsLastUsed(settings.id);
 
+      console.log(`✅ [ReplyQueue] Reply posted successfully: ${result.replyUrl}`);
+
+      // Queue DM BEFORE marking reply complete - ensures DM is next in account queue
+      if (data.sendDm && result.replyUrl) {
+        await this.queueDm(result.replyUrl, data.dmDelaySeconds || 45, data.username, result.proxy);
+      }
+
       jobManager.completeJob(job.id, {
         replyId: result.replyId,
         replyUrl: result.replyUrl,
-        proxy: result.proxy, // Store the proxy that was used
+        proxy: result.proxy,
         likeSuccess: likeResult?.success
       });
-
-      console.log(`✅ [ReplyQueue] Reply posted successfully: ${result.replyUrl}`);
-
-      if (data.sendDm && result.replyUrl) {
-        this.queueDm(result.replyUrl, data.dmDelaySeconds || 45, data.username, result.proxy);
-      }
 
       // Cooldown after each reply to avoid triggering anti-spam
       const cooldownMs = this.getRandomDelay(3000, 8000); // 3-8 seconds (TwexAPI is fast)
@@ -252,6 +253,7 @@ class ReplyQueue {
       await new Promise(resolve => setTimeout(resolve, cooldownMs));
     } finally {
       // Mark job complete in account queue so next job can process
+      // DM was already queued above (if enabled), so it will be next in line
       if (accountUsername) {
         accountQueueManager.completeJob(accountUsername, job.id);
       }
