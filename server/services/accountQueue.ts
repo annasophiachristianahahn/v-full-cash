@@ -4,6 +4,7 @@ import { Job, jobManager } from './jobManager';
 // Minimum delay between jobs to maintain human-like behavior
 // even when jobs pile up due to slow processing
 // 15-30 seconds simulates human time to read next tweet, think, and compose response
+// Humanization timing constants - simulates realistic human behavior
 const MIN_INTER_JOB_DELAY_MS = 15000;  // 15 seconds minimum between jobs
 const MAX_INTER_JOB_DELAY_MS = 30000;  // 30 seconds maximum
 
