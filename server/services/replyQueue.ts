@@ -223,7 +223,7 @@ class ReplyQueue {
 
       console.log(`🚀 [ReplyQueue] Processing reply from @${data.username} to tweet ${data.tweetId}${data.alsoLikeTweet ? ' + LIKE' : ''}`);
 
-      let result: { success: boolean; replyId?: string; replyUrl?: string; error?: string };
+      let result: { success: boolean; replyId?: string; replyUrl?: string; proxy?: string; error?: string };
       let likeResult: { success: boolean; error?: string } | undefined;
 
       // Use combined reply+like method when alsoLikeTweet is true
@@ -236,19 +236,20 @@ class ReplyQueue {
           username: data.username,
           tweetUrl: data.tweetUrl
         });
-        
+
         result = {
           success: combinedResult.replySuccess,
           replyId: combinedResult.replyId,
           replyUrl: combinedResult.replyUrl,
+          proxy: combinedResult.proxy,
           error: combinedResult.replyError
         };
-        
+
         likeResult = {
           success: combinedResult.likeSuccess,
           error: combinedResult.likeError
         };
-        
+
         if (combinedResult.likeSuccess) {
           console.log(`❤️ [ReplyQueue] Like succeeded in same session`);
         } else if (combinedResult.likeError) {
