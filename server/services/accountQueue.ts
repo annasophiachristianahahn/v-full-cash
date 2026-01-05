@@ -3,10 +3,9 @@ import { Job, jobManager } from './jobManager';
 
 // Minimum delay between jobs to maintain human-like behavior
 // even when jobs pile up due to slow processing
-// These match the cooldown delays in replyQueue (3-8s success, 8-20s failure)
-// We use a middle ground since we don't know if the previous job succeeded or failed
-const MIN_INTER_JOB_DELAY_MS = 5000;  // 5 seconds minimum between jobs
-const MAX_INTER_JOB_DELAY_MS = 12000; // 12 seconds maximum
+// 15-30 seconds simulates human time to read next tweet, think, and compose response
+const MIN_INTER_JOB_DELAY_MS = 15000;  // 15 seconds minimum between jobs
+const MAX_INTER_JOB_DELAY_MS = 30000;  // 30 seconds maximum
 
 const randomDelay = (min: number, max: number): number =>
   Math.floor(Math.random() * (max - min + 1)) + min;
