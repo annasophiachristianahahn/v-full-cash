@@ -259,6 +259,8 @@ class ReplyQueue {
   }
 
   async queueDm(replyUrl: string, delaySeconds: number, username: string, proxy?: string): Promise<Job> {
+    console.log(`📨 [ReplyQueue] Creating DM job for @${username} with ${delaySeconds}s delay, replyUrl: ${replyUrl}`);
+
     const job = jobManager.createJob('dm', {
       message: replyUrl,
       delaySeconds,
@@ -266,6 +268,7 @@ class ReplyQueue {
       proxy // Store the proxy to use for the DM
     }, delaySeconds);
 
+    console.log(`📨 [ReplyQueue] DM job ${job.id} created with status: ${job.status}`);
     return job;
   }
 

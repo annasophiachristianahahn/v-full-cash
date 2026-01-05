@@ -43,10 +43,12 @@ class AccountQueueManager extends EventEmitter {
     const queue = this.accountQueues.get(username)!;
     queue.push(job);
 
-    console.log(`[AccountQueue] Enqueued ${job.type} job ${job.id} for @${username} (queue size: ${queue.length})`);
+    const isAccountBusy = this.processingJobs.has(username);
+    const currentJobId = this.processingJobs.get(username);
+    console.log(`[AccountQueue] Enqueued ${job.type} job ${job.id} for @${username} (queue size: ${queue.length}, account busy: ${isAccountBusy}, current job: ${currentJobId || 'none'})`);
 
     // Start processing if this account isn't already busy
-    if (!this.processingJobs.has(username)) {
+    if (!isAccountBusy) {
       this.processNextForAccount(username);
     }
   }
@@ -101,10 +103,14 @@ class AccountQueueManager extends EventEmitter {
     if (currentJobId === jobId) {
       this.processingJobs.delete(username);
       this.lastCompletionTimes.set(username, Date.now()); // Track completion time for humanization
-      console.log(`[AccountQueue] Completed job ${jobId} for @${username}`);
+      const queue = this.accountQueues.get(username);
+      const queueSize = queue ? queue.length : 0;
+      console.log(`[AccountQueue] Completed job ${jobId} for @${username} (${queueSize} jobs remaining in queue)`);
 
       // Process next job for this account
       setImmediate(() => this.processNextForAccount(username));
+    } else {
+      console.warn(`[AccountQueue] Tried to complete job ${jobId} for @${username} but current job is ${currentJobId || 'none'}`);
     }
   }
 
