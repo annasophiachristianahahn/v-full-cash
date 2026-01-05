@@ -87,7 +87,7 @@ async function sendSingleDM(
   // Only navigate if not already on the page
   if (!skipNavigation) {
     const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
-    await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await sleep(randomDelay(1500, 2500));
   }
 
@@ -215,6 +215,8 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
     const launchOptions: any = {
       headless: 'new',
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+      timeout: 120000,         // 2 minute launch timeout (Railway can be slow)
+      protocolTimeout: 180000, // 3 minute protocol timeout for slow operations
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -272,7 +274,7 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
     // Go directly to messages (skip home page)
     console.log('📤 [PuppeteerDM] Navigating to messages');
     const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
-    await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }); // Increased timeout for Railway
     await sleep(randomDelay(1000, 2000));
 
     // Check authentication
