@@ -95,6 +95,17 @@ class ReplyQueue {
     return job;
   }
 
+  /**
+   * Queue bulk replies with unified sequential scheduling.
+   *
+   * Instead of using independent timers for each reply (which race with DMs),
+   * we create all jobs upfront and enqueue them directly to the account queue.
+   * The sequence is: Reply1 -> DM1 -> Reply2 -> DM2 -> etc.
+   *
+   * Timing is handled by:
+   * - accountQueueManager's humanization delays between jobs (15-30s)
+   * - DM's internal delay before sending (from dmDelayRange)
+   */
   async queueBulkReplies(replies: Array<{
     tweetId: string;
     replyText: string;
@@ -105,34 +116,60 @@ class ReplyQueue {
   }>, options: {
     sendDm: boolean;
     dmDelayRange: { min: number; max: number };
-    replyDelayRange: { min: number; max: number };
+    replyDelayRange: { min: number; max: number };  // Now used for humanization reference, not timers
   }): Promise<Job[]> {
     const jobs: Job[] = [];
-    let cumulativeDelay = 0;
 
-    for (let i = 0; i < replies.length; i++) {
-      const reply = replies[i];
-      
-      const replyDelay = i === 0 ? 0 : this.getRandomDelay(
-        options.replyDelayRange.min,
-        options.replyDelayRange.max
-      );
-      cumulativeDelay += replyDelay;
-
-      const dmDelay = options.sendDm 
-        ? this.getRandomDelay(options.dmDelayRange.min, options.dmDelayRange.max)
-        : 0;
-
-      const job = await this.queueReply({
-        ...reply,
-        delaySeconds: cumulativeDelay,
-        sendDm: options.sendDm,
-        dmDelaySeconds: dmDelay
-      });
-
-      jobs.push(job);
+    // Group replies by username for per-account sequential processing
+    const repliesByUser = new Map<string, typeof replies>();
+    for (const reply of replies) {
+      if (!repliesByUser.has(reply.username)) {
+        repliesByUser.set(reply.username, []);
+      }
+      repliesByUser.get(reply.username)!.push(reply);
     }
 
+    // For each account, create all reply+DM jobs and enqueue them sequentially
+    for (const [username, userReplies] of repliesByUser) {
+      console.log(`📋 [ReplyQueue] Queueing ${userReplies.length} replies for @${username} (unified sequential scheduling)`);
+
+      for (let i = 0; i < userReplies.length; i++) {
+        const reply = userReplies[i];
+
+        // Generate DM delay for this reply (will be used when DM is created after reply succeeds)
+        const dmDelay = options.sendDm
+          ? this.getRandomDelay(options.dmDelayRange.min, options.dmDelayRange.max)
+          : 0;
+
+        // Create reply job synchronously and enqueue directly (no timer)
+        const replyJob = jobManager.createJobSync('reply', {
+          ...reply,
+          sendDm: options.sendDm,
+          dmDelaySeconds: dmDelay,
+          alsoLikeTweet: false
+        });
+
+        // Directly enqueue to account queue (sequential processing)
+        accountQueueManager.enqueueJob(username, replyJob);
+
+        this.pendingReplies.set(replyJob.id, {
+          jobId: replyJob.id,
+          tweetId: reply.tweetId,
+          replyText: reply.replyText,
+          username: reply.username,
+          tweetUrl: reply.tweetUrl,
+          mediaUrl: reply.mediaUrl,
+          authorHandle: reply.authorHandle,
+          sendDm: options.sendDm,
+          dmDelaySeconds: dmDelay
+        });
+
+        jobs.push(replyJob);
+        console.log(`📋 [ReplyQueue] Enqueued reply ${i + 1}/${userReplies.length} for @${username} (DM delay: ${dmDelay}s)`);
+      }
+    }
+
+    console.log(`📋 [ReplyQueue] Total ${jobs.length} reply jobs enqueued (DMs will be created after each reply succeeds)`);
     return jobs;
   }
 
