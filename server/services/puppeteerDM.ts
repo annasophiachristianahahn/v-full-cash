@@ -275,9 +275,9 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
     console.log('📤 [PuppeteerDM] Navigating to messages');
     const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
     await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 60000 }); // Increased timeout for Railway
-    await sleep(randomDelay(1000, 2000));
 
-    // Check authentication
+    // Wait for authentication indicators with proper timeout
+    // Twitter's JS needs time to render after domcontentloaded
     const loggedInIndicators = [
       'a[data-testid="AppTabBar_Home_Link"]',
       'a[aria-label="Home"]',
@@ -285,10 +285,19 @@ export async function sendTwitterDM(params: SendDMParams): Promise<SendDMResult>
     ];
 
     let isLoggedIn = false;
-    for (const selector of loggedInIndicators) {
-      if (await page.$(selector) !== null) {
-        isLoggedIn = true;
-        break;
+    const maxWaitTime = 15000; // 15 seconds max wait
+    const checkInterval = 500; // Check every 500ms
+    const startTime = Date.now();
+
+    while (!isLoggedIn && (Date.now() - startTime) < maxWaitTime) {
+      for (const selector of loggedInIndicators) {
+        if (await page.$(selector) !== null) {
+          isLoggedIn = true;
+          break;
+        }
+      }
+      if (!isLoggedIn) {
+        await sleep(checkInterval);
       }
     }
 
