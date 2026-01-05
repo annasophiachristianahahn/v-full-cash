@@ -1,12 +1,14 @@
 import { EventEmitter } from 'events';
 import { Job, jobManager } from './jobManager';
 
-// Minimum delay between jobs to maintain human-like behavior
-// even when jobs pile up due to slow processing
-// 15-30 seconds simulates human time to read next tweet, think, and compose response
-// Humanization timing constants - simulates realistic human behavior
-const MIN_INTER_JOB_DELAY_MS = 15000;  // 15 seconds minimum between jobs
-const MAX_INTER_JOB_DELAY_MS = 30000;  // 30 seconds maximum
+// Humanization timing constants - different delays for different job types
+// DM follows reply quickly (you're already engaged with that tweet)
+const DM_MIN_DELAY_MS = 7000;   // 7 seconds before DM
+const DM_MAX_DELAY_MS = 14000;  // 14 seconds before DM
+
+// Reply requires finding/reading next tweet (longer delay)
+const REPLY_MIN_DELAY_MS = 20000;  // 20 seconds before next reply
+const REPLY_MAX_DELAY_MS = 33000;  // 33 seconds before next reply
 
 const randomDelay = (min: number, max: number): number =>
   Math.floor(Math.random() * (max - min + 1)) + min;
@@ -72,15 +74,21 @@ class AccountQueueManager extends EventEmitter {
     const job = queue.shift()!;
     this.processingJobs.set(username, job.id);
 
-    // Check if there are more jobs waiting - if so, add humanization delay
-    // This prevents rapid-fire execution when jobs pile up due to slow processing
+    // Add humanization delay based on job type
+    // DMs are quick follow-ups (7-14s), replies need time to find next tweet (20-33s)
     const lastCompletionTime = this.lastCompletionTimes.get(username);
     if (lastCompletionTime) {
       const timeSinceLastJob = Date.now() - lastCompletionTime;
-      if (timeSinceLastJob < MIN_INTER_JOB_DELAY_MS) {
-        const remainingDelay = randomDelay(MIN_INTER_JOB_DELAY_MS, MAX_INTER_JOB_DELAY_MS) - timeSinceLastJob;
+
+      // Select delay range based on job type
+      const minDelay = job.type === 'dm' ? DM_MIN_DELAY_MS : REPLY_MIN_DELAY_MS;
+      const maxDelay = job.type === 'dm' ? DM_MAX_DELAY_MS : REPLY_MAX_DELAY_MS;
+
+      if (timeSinceLastJob < minDelay) {
+        const targetDelay = randomDelay(minDelay, maxDelay);
+        const remainingDelay = targetDelay - timeSinceLastJob;
         if (remainingDelay > 0) {
-          console.log(`[AccountQueue] Humanization delay: waiting ${Math.round(remainingDelay / 1000)}s before next job for @${username}`);
+          console.log(`[AccountQueue] Humanization delay: waiting ${Math.round(remainingDelay / 1000)}s before ${job.type} for @${username}`);
           await new Promise(resolve => setTimeout(resolve, remainingDelay));
         }
       }

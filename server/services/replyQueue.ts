@@ -264,8 +264,9 @@ class ReplyQueue {
 
       // Queue DM BEFORE marking reply complete - ensures DM is next in account queue
       // Use sync version to guarantee DM is queued before completeJob triggers processNext
+      // Note: DM delay (7-14s) is handled by accountQueueManager based on job type
       if (data.sendDm && result.replyUrl) {
-        this.queueDmSync(result.replyUrl, data.dmDelaySeconds || 45, data.username, result.proxy);
+        this.queueDmSync(result.replyUrl, data.username, result.proxy);
       }
 
       jobManager.completeJob(job.id, {
@@ -298,14 +299,14 @@ class ReplyQueue {
     }
   }
 
-  queueDmSync(replyUrl: string, delaySeconds: number, username: string, proxy?: string): Job {
-    console.log(`📨 [ReplyQueue] Creating DM job for @${username} (internal delay: ${delaySeconds}s), replyUrl: ${replyUrl}`);
+  queueDmSync(replyUrl: string, username: string, proxy?: string): Job {
+    console.log(`📨 [ReplyQueue] Creating DM job for @${username}, replyUrl: ${replyUrl}`);
 
     // Create job directly without going through the async event system
     // This ensures the DM is in the queue BEFORE completeJob triggers processNext
+    // Note: Humanization delay (7-14s) is handled by accountQueueManager
     const job = jobManager.createJobSync('dm', {
       message: replyUrl,
-      internalDelaySeconds: delaySeconds,
       username,
       proxy
     });
@@ -313,7 +314,7 @@ class ReplyQueue {
     // Directly enqueue to account queue (bypass the event listener)
     accountQueueManager.enqueueJob(username, job);
 
-    console.log(`📨 [ReplyQueue] DM job ${job.id} directly enqueued (will wait ${delaySeconds}s internally before sending)`);
+    console.log(`📨 [ReplyQueue] DM job ${job.id} directly enqueued (delay handled by accountQueueManager)`);
     return job;
   }
 
@@ -367,7 +368,7 @@ class ReplyQueue {
   }
 
   private async processDm(job: Job, username?: string): Promise<void> {
-    const data = job.data as DmJobData & { proxy?: string; internalDelaySeconds?: number };
+    const data = job.data as DmJobData & { proxy?: string };
     const accountUsername = username || data.username;
 
     try {
@@ -378,13 +379,7 @@ class ReplyQueue {
         throw new Error(`No Twitter cookie configured for user: ${data.username}`);
       }
 
-      // Handle internal delay (humanization between reply and DM)
-      const internalDelay = data.internalDelaySeconds || 0;
-      if (internalDelay > 0) {
-        console.log(`⏳ [ReplyQueue] Waiting ${internalDelay}s before sending DM (humanization delay)`);
-        await new Promise(resolve => setTimeout(resolve, internalDelay * 1000));
-      }
-
+      // Note: Humanization delay (7-14s) is handled by accountQueueManager before this runs
       console.log(`📤 [ReplyQueue] Sending DM from @${data.username} with reply URL: ${data.message}`);
       if (data.proxy) {
         console.log(`📤 [ReplyQueue] Using same proxy as reply: ${data.proxy.substring(0, 30)}...`);
