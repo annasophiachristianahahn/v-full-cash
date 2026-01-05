@@ -39,9 +39,21 @@ class AccountQueueManager extends EventEmitter {
   private enqueuedJobIds: Set<string> = new Set();
 
   /**
-   * Add a job to an account's queue
+   * Add a job to an account's queue (at the end)
    */
   enqueueJob(username: string, job: Job): void {
+    this.enqueueJobInternal(username, job, false);
+  }
+
+  /**
+   * Add a job to the FRONT of an account's queue (for priority jobs like DMs after replies)
+   * This ensures the DM runs immediately after the current job completes.
+   */
+  enqueueJobPriority(username: string, job: Job): void {
+    this.enqueueJobInternal(username, job, true);
+  }
+
+  private enqueueJobInternal(username: string, job: Job, priority: boolean): void {
     // Prevent double-enqueueing the same job
     if (this.enqueuedJobIds.has(job.id)) {
       console.warn(`[AccountQueue] Job ${job.id} already enqueued, skipping duplicate`);
@@ -54,11 +66,18 @@ class AccountQueueManager extends EventEmitter {
     }
 
     const queue = this.accountQueues.get(username)!;
-    queue.push(job);
+
+    if (priority) {
+      // Insert at the front of the queue (runs next after current job)
+      queue.unshift(job);
+    } else {
+      // Add to the end of the queue
+      queue.push(job);
+    }
 
     const isAccountBusy = this.processingJobs.has(username);
     const currentJobId = this.processingJobs.get(username);
-    console.log(`[AccountQueue] Enqueued ${job.type} job ${job.id} for @${username} (queue size: ${queue.length}, account busy: ${isAccountBusy}, current job: ${currentJobId || 'none'})`);
+    console.log(`[AccountQueue] Enqueued ${job.type} job ${job.id} for @${username} (${priority ? 'PRIORITY' : 'normal'}, queue size: ${queue.length}, account busy: ${isAccountBusy}, current job: ${currentJobId || 'none'})`);
 
     // Start processing if this account isn't already busy
     if (!isAccountBusy) {

@@ -327,10 +327,12 @@ class ReplyQueue {
       proxy
     });
 
-    // Directly enqueue to account queue (bypass the event listener)
-    accountQueueManager.enqueueJob(username, job);
+    // Use PRIORITY enqueue to insert DM at front of queue
+    // This ensures DM runs immediately after the current reply completes
+    // (not after all other replies in the queue)
+    accountQueueManager.enqueueJobPriority(username, job);
 
-    console.log(`📨 [ReplyQueue] DM job ${job.id} directly enqueued (delay handled by accountQueueManager)`);
+    console.log(`📨 [ReplyQueue] DM job ${job.id} PRIORITY enqueued (runs next after current job)`);
     return job;
   }
 
