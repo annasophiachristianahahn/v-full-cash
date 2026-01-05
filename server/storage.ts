@@ -73,6 +73,7 @@ export interface IStorage {
   getAllOrganicActivitySchedules(): Promise<OrganicActivitySchedule[]>;
   createOrganicActivitySchedule(schedule: InsertOrganicActivitySchedule): Promise<OrganicActivitySchedule>;
   updateOrganicActivitySchedule(username: string, updates: Partial<InsertOrganicActivitySchedule>): Promise<void>;
+  deleteOrganicActivitySchedule(username: string): Promise<void>;
   resetDailyLikesForAllAccounts(): Promise<void>;
 
   // Following cache
@@ -549,6 +550,12 @@ export class DatabaseStorage implements IStorage {
     const db = await this.getDb();
     await db.update(organicActivitySchedule)
       .set({ ...updates, updatedAt: new Date() })
+      .where(eq(organicActivitySchedule.username, username));
+  }
+
+  async deleteOrganicActivitySchedule(username: string): Promise<void> {
+    const db = await this.getDb();
+    await db.delete(organicActivitySchedule)
       .where(eq(organicActivitySchedule.username, username));
   }
 
@@ -1118,6 +1125,10 @@ export class MemStorage implements IStorage {
     if (existing) {
       this.organicSchedules.set(username, { ...existing, ...updates, updatedAt: new Date() });
     }
+  }
+
+  async deleteOrganicActivitySchedule(username: string): Promise<void> {
+    this.organicSchedules.delete(username);
   }
 
   async resetDailyLikesForAllAccounts(): Promise<void> {

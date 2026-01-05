@@ -77,7 +77,7 @@ class OrganicActivityService {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    
+
     const isEnabled = process.env.ORGANIC_ACTIVITY_ENABLED !== 'false';
     if (!isEnabled) {
       log('Organic activity disabled (ORGANIC_ACTIVITY_ENABLED=false)');
@@ -85,11 +85,15 @@ class OrganicActivityService {
     }
 
     log('Initializing organic activity service...');
-    
+
+    // First sync schedules with twitter_settings to clean up any orphaned entries
+    await this.syncSchedulesWithTwitterSettings();
+
+    // Then ensure all accounts with cookies have schedules
     await this.ensureSchedulesExist();
     this.startChecker();
     this.initialized = true;
-    
+
     log('✅ Organic activity service initialized');
   }
 
@@ -439,10 +443,10 @@ class OrganicActivityService {
   // Manual trigger for testing - executes a single like for a specific account
   async testLikeForAccount(username: string): Promise<{ success: boolean; message: string }> {
     log(`🧪 Manual test: triggering organic like for @${username}`);
-    
+
     const storage = await getStorage();
     const settings = await storage.getTwitterSettingsByUsername(username);
-    
+
     if (!settings?.twitterCookie) {
       return { success: false, message: `No cookie found for @${username}` };
     }
@@ -453,6 +457,70 @@ class OrganicActivityService {
     } catch (error: any) {
       return { success: false, message: `Error: ${error.message}` };
     }
+  }
+
+  /**
+   * Sync organic activity schedules with twitter_settings
+   * - Deletes orphaned schedules (usernames not in twitter_settings)
+   * - Creates missing schedules (accounts with cookies but no schedule)
+   */
+  async syncSchedulesWithTwitterSettings(): Promise<{ deleted: string[]; created: string[] }> {
+    log('🔄 Syncing organic activity schedules with twitter_settings...');
+
+    const storage = await getStorage();
+    const allSettings = await storage.getAllTwitterSettings();
+    const allSchedules = await storage.getAllOrganicActivitySchedules();
+
+    // Build set of valid usernames (accounts with cookies)
+    const validUsernames = new Set(
+      allSettings
+        .filter(s => s.twitterCookie)
+        .map(s => s.username)
+    );
+
+    const deleted: string[] = [];
+    const created: string[] = [];
+
+    // Delete orphaned schedules (username doesn't exist in twitter_settings)
+    for (const schedule of allSchedules) {
+      if (!validUsernames.has(schedule.username)) {
+        log(`🗑️ Deleting orphaned schedule for @${schedule.username} (not found in twitter_settings)`);
+        await storage.deleteOrganicActivitySchedule(schedule.username);
+        deleted.push(schedule.username);
+      }
+    }
+
+    // Build set of existing schedule usernames
+    const existingScheduleUsernames = new Set(allSchedules.map(s => s.username));
+
+    // Create missing schedules for accounts that have cookies but no schedule
+    const today = getTodayDateString();
+    for (const settings of allSettings) {
+      if (settings.twitterCookie && !existingScheduleUsernames.has(settings.username)) {
+        const dailyLikesTarget = Math.floor(Math.random() * 13) + 3; // 3-15
+        const nextRetweetDate = getFutureDateString(Math.floor(Math.random() * 3) + 2); // 2-4 days
+        const { sleepStart, sleepEnd } = await calculateSleepPeriod();
+
+        await storage.createOrganicActivitySchedule({
+          username: settings.username,
+          dailyLikesTarget,
+          likesCompletedToday: 0,
+          lastLikeDate: today,
+          nextLikeTime: getRandomFutureTime(45, 240),
+          lastRetweetDate: null,
+          nextRetweetDate,
+          sleepStartTime: sleepStart,
+          sleepEndTime: sleepEnd,
+          lastSleepCalculation: today
+        });
+
+        log(`✅ Created schedule for @${settings.username}: ${dailyLikesTarget} likes/day`);
+        created.push(settings.username);
+      }
+    }
+
+    log(`🔄 Sync complete: deleted ${deleted.length} orphaned, created ${created.length} new schedules`);
+    return { deleted, created };
   }
 }
 
