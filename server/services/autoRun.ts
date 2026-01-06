@@ -491,12 +491,14 @@ class AutoRunService extends EventEmitter {
     }
 
     // Queue raid replies using unified sequential scheduling (no DMs for raid replies)
+    // alsoLikeTweet: true makes raid accounts like the primary reply they're replying to
     const jobs = await replyQueue.queueBulkReplies(
       raidRepliesData,
       {
         sendDm: false,
         dmDelayRange: { min: 0, max: 0 },
-        replyDelayRange: replyDelayRange
+        replyDelayRange: replyDelayRange,
+        alsoLikeTweet: true  // Raid accounts like the primary reply
       }
     );
 

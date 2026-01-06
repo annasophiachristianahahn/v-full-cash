@@ -34,17 +34,12 @@ class ReplyQueue {
     // Jobs are queued per-account for sequential processing
     // NOTE: This listener handles jobs from queueReply (timer-based) and queueLike
     // Jobs from queueBulkReplies and queueDmSync are directly enqueued, NOT via this listener
+    // accountQueueManager.enqueueJob already prevents double-enqueueing via enqueuedJobIds Set
     jobManager.on('job:started', (job: Job) => {
       const data = job.data as ReplyJobData | DmJobData | LikeJobData;
 
-      // Skip if job is already queued (from createJobSync + direct enqueue)
-      // This prevents double-enqueueing for jobs that bypass the event system
-      if (job.status === 'queued') {
-        console.log(`[ReplyQueue] Job ${job.id} already queued, skipping event-based enqueue`);
-        return;
-      }
-
       // Queue the job for the account - will be processed sequentially per account
+      // Note: accountQueueManager.enqueueJob has built-in duplicate prevention
       if (data.username) {
         accountQueueManager.enqueueJob(data.username, job);
       } else {
@@ -126,6 +121,7 @@ class ReplyQueue {
     sendDm: boolean;
     dmDelayRange: { min: number; max: number };
     replyDelayRange: { min: number; max: number };  // Now used for humanization reference, not timers
+    alsoLikeTweet?: boolean;  // Like the tweet being replied to (for raid replies)
   }): Promise<Job[]> {
     const jobs: Job[] = [];
 
@@ -151,12 +147,12 @@ class ReplyQueue {
           : 0;
 
         // Create reply job synchronously and enqueue directly (no timer)
-        console.log(`📋 [ReplyQueue] Creating reply job with sendDm=${options.sendDm}`);
+        console.log(`📋 [ReplyQueue] Creating reply job with sendDm=${options.sendDm}, alsoLikeTweet=${options.alsoLikeTweet ?? false}`);
         const replyJob = jobManager.createJobSync('reply', {
           ...reply,
           sendDm: options.sendDm,
           dmDelaySeconds: dmDelay,
-          alsoLikeTweet: false
+          alsoLikeTweet: options.alsoLikeTweet ?? false
         });
         console.log(`📋 [ReplyQueue] Created job ${replyJob.id}, job.data.sendDm=${replyJob.data.sendDm}`);
 
