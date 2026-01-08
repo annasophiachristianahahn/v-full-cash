@@ -160,6 +160,7 @@ class AutoRunService extends EventEmitter {
       replyJobIds: [],
       raidReplyJobIds: [],
       sentReplyUrls: [],
+      completedRaidReplyUrls: [],
       recentErrors: []
     };
     this.emitStateChange();

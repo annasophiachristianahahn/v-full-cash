@@ -421,6 +421,11 @@ export class TwexApiService {
       console.log(`[TwexAPI] ========== GET FOLLOWING RESPONSE ==========`);
       console.log(`[TwexAPI] HTTP Status: ${response.status} ${response.statusText}`);
       console.log(`[TwexAPI] Response code: ${data.code}, msg: ${data.msg}`);
+      // Log first user object structure to help diagnose field mappings
+      if (data.data && data.data.length > 0) {
+        console.log(`[TwexAPI] Sample user object fields:`, Object.keys(data.data[0]));
+        console.log(`[TwexAPI] Sample user object:`, JSON.stringify(data.data[0], null, 2));
+      }
 
       const isSuccess = response.ok && (data.msg === 'success' || (data.code >= 200 && data.code < 300));
 
@@ -431,10 +436,10 @@ export class TwexApiService {
       }
 
       const followingList = (data.data || []).map((user: any) => ({
-        userId: user.userId,
-        username: user.username,
-        name: user.name
-      }));
+        userId: user.userId || user.id || user.rest_id || user.user_id || '',
+        username: user.username || user.screen_name || user.screenName || user.handle || '',
+        name: user.name || user.display_name || user.displayName || ''
+      })).filter((user: any) => user.username); // Filter out entries with no username
 
       console.log(`[TwexAPI] ✅ Retrieved ${followingList.length} following accounts`);
 
