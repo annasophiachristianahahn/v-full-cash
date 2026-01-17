@@ -1509,7 +1509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Direct DM test - test sending a DM without going through the main flow
   app.post("/api/test-direct-dm", async (req, res) => {
     try {
-      const { username, message, groupChatId } = req.body;
+      const { username, message } = req.body;
       if (!username || !message) {
         return res.status(400).json({ success: false, error: "Username and message are required" });
       }
@@ -1523,11 +1523,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`🧪 Direct DM test: @${username} -> "${message.substring(0, 50)}..."`);
 
-      const { twitterAutomation } = await import('./services/twitterAutomation');
-      const result = await twitterAutomation.sendDm({
+      const { sendTwitterDM } = await import('./services/puppeteerDM');
+      const result = await sendTwitterDM({
         message,
         twitterCookie: settings.twitterCookie,
-        groupChatId: groupChatId || '1969047827406831927',
         username
       });
 
