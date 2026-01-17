@@ -88,25 +88,46 @@ async function sendSingleDM(
   if (!skipNavigation) {
     const messagesUrl = `https://x.com/messages/${GROUP_CHAT_ID}`;
     await page.goto(messagesUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await sleep(randomDelay(1500, 2500));
+    // Wait longer for Twitter's JS to render the DM interface
+    await sleep(randomDelay(3000, 5000));
   }
 
   const messageInputSelectors = [
     'div[data-testid="dmComposerTextInput"]',
+    'div[data-testid="dmComposerTextInput"] div[contenteditable="true"]',
+    'div[data-testid="DmScrollerContainer"] div[contenteditable="true"]',
     'div[data-testid="tweetTextarea_0"]',
     'div.DraftEditor-root',
-    'div[contenteditable="true"][role="textbox"]'
+    'div[contenteditable="true"][role="textbox"]',
+    'div[contenteditable="true"][data-testid]',
+    '[data-testid="dmComposerTextInputRichTextInputContainer"] div[contenteditable="true"]'
   ];
 
   let usedSelector: string | null = null;
+  console.log(`📤 [PuppeteerDM] Looking for message input field...`);
   for (const selector of messageInputSelectors) {
-    if (await waitForSelectorSafe(page, selector, 5000)) {
+    console.log(`📤 [PuppeteerDM] Trying selector: ${selector}`);
+    if (await waitForSelectorSafe(page, selector, 3000)) {
       usedSelector = selector;
+      console.log(`📤 [PuppeteerDM] Found input with selector: ${selector}`);
       break;
     }
   }
 
   if (!usedSelector) {
+    // Take screenshot for debugging
+    try {
+      const screenshotPath = `/tmp/dm-debug-${Date.now()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      console.log(`📤 [PuppeteerDM] Debug screenshot saved to ${screenshotPath}`);
+    } catch (e) {
+      console.log(`📤 [PuppeteerDM] Could not save debug screenshot`);
+    }
+    // Log the page HTML structure for debugging
+    const pageContent = await page.content();
+    console.log(`📤 [PuppeteerDM] Page URL: ${page.url()}`);
+    console.log(`📤 [PuppeteerDM] Page contains 'dmComposer': ${pageContent.includes('dmComposer')}`);
+    console.log(`📤 [PuppeteerDM] Page contains 'contenteditable': ${pageContent.includes('contenteditable')}`);
     throw new Error('Could not find message input field');
   }
 
