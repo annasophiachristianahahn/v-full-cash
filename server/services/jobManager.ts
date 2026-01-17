@@ -282,12 +282,35 @@ class JobManager extends EventEmitter {
   clearCompletedJobs(olderThanMs: number = 3600000) {
     const cutoff = Date.now() - olderThanMs;
     const entries = Array.from(this.jobs.entries());
+    let cleared = 0;
     for (const [id, job] of entries) {
-      if (job.completedAt && job.completedAt.getTime() < cutoff) {
+      // Clear completed, failed, and cancelled jobs older than cutoff
+      if (job.completedAt && job.completedAt.getTime() < cutoff &&
+          (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled')) {
         this.jobs.delete(id);
+        cleared++;
       }
     }
-    this.emitStateChange();
+    if (cleared > 0) {
+      this.emitStateChange();
+    }
+    return cleared;
+  }
+
+  // Start automatic cleanup every 30 minutes
+  startAutoCleanup() {
+    setInterval(() => {
+      const cleared = this.clearCompletedJobs(30 * 60 * 1000); // Clear jobs older than 30 minutes
+      if (cleared > 0) {
+        console.log(`[JobManager] Auto-cleanup: cleared ${cleared} old jobs`);
+      }
+    }, 30 * 60 * 1000); // Run every 30 minutes
+
+    // Also clear any old jobs on startup (older than 1 hour)
+    const initialCleared = this.clearCompletedJobs(60 * 60 * 1000);
+    if (initialCleared > 0) {
+      console.log(`[JobManager] Startup cleanup: cleared ${initialCleared} old jobs`);
+    }
   }
 
   private emitStateChange() {

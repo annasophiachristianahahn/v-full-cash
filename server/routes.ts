@@ -78,6 +78,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Clear completed/failed jobs older than specified hours (default 1 hour)
+  app.post("/api/jobs/clear-completed", (req, res) => {
+    try {
+      const { olderThanHours = 1 } = req.body;
+      const olderThanMs = olderThanHours * 60 * 60 * 1000;
+      const beforeCount = jobManager.getAllJobs().length;
+      jobManager.clearCompletedJobs(olderThanMs);
+      const afterCount = jobManager.getAllJobs().length;
+      const cleared = beforeCount - afterCount;
+      console.log(`[JobManager] Cleared ${cleared} completed jobs (older than ${olderThanHours}h)`);
+      res.json({ success: true, cleared, message: `Cleared ${cleared} completed jobs` });
+    } catch (error: any) {
+      console.error('Error clearing completed jobs:', error);
+      res.status(500).json({ success: false, error: error.message || 'Unknown error' });
+    }
+  });
+
   // Auto-run endpoints
   app.get("/api/auto-run/state", (req, res) => {
     res.json(autoRunService.getState());
@@ -243,7 +260,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Single Tweet Auto Run - runs full auto-run chain for a single tweet
   app.post("/api/single-auto-run", async (req, res) => {
     try {
-      const { tweetUrl, sendDm = false } = req.body; // DM disabled temporarily
+      const { tweetUrl, sendDm = true } = req.body;
       
       if (!tweetUrl) {
         return res.status(400).json({ error: "tweetUrl is required" });
@@ -614,7 +631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mediaUrl, 
         authorHandle, 
         delaySeconds = 0,
-        sendDm = false,
+        sendDm = true,
         dmDelaySeconds = 45
       } = req.body;
 
@@ -646,7 +663,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const {
         replies,
-        sendDm = false,
+        sendDm = true,
         dmDelayRange = { min: 7, max: 14 },
         replyDelayRange = { min: 27, max: 47 }
       } = req.body;

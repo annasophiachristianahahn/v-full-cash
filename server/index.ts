@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { schedulerService } from "./services/scheduler";
 import { organicActivityService } from "./services/organicActivityService";
+import { jobManager } from "./services/jobManager";
 
 // Log buffer for debugging - stores last 1000 log entries
 export const logBuffer: Array<{ timestamp: string; level: string; message: string }> = [];
@@ -126,5 +127,9 @@ app.use((req, res, next) => {
     }).catch((error) => {
       console.error('Failed to initialize organic activity service:', error);
     });
+
+    // Start job manager auto-cleanup (clears old completed/failed jobs)
+    jobManager.startAutoCleanup();
+    log('Job manager auto-cleanup started');
   });
 })();
