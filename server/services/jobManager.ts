@@ -279,37 +279,46 @@ class JobManager extends EventEmitter {
     };
   }
 
-  clearCompletedJobs(olderThanMs: number = 3600000) {
-    const cutoff = Date.now() - olderThanMs;
+  // Keep only the last MAX_ACTIVITY_ENTRIES completed/failed/cancelled jobs
+  private readonly MAX_ACTIVITY_ENTRIES = 100;
+
+  pruneToMaxEntries() {
     const entries = Array.from(this.jobs.entries());
+    // Get finished jobs sorted by completion time (oldest first)
+    const finishedJobs = entries
+      .filter(([_, job]) => job.completedAt &&
+        (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'))
+      .sort((a, b) => (a[1].completedAt?.getTime() || 0) - (b[1].completedAt?.getTime() || 0));
+
+    // If we have more than MAX_ACTIVITY_ENTRIES finished jobs, remove the oldest ones
+    const toRemove = finishedJobs.length - this.MAX_ACTIVITY_ENTRIES;
     let cleared = 0;
-    for (const [id, job] of entries) {
-      // Clear completed, failed, and cancelled jobs older than cutoff
-      if (job.completedAt && job.completedAt.getTime() < cutoff &&
-          (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled')) {
-        this.jobs.delete(id);
+    if (toRemove > 0) {
+      for (let i = 0; i < toRemove; i++) {
+        this.jobs.delete(finishedJobs[i][0]);
         cleared++;
       }
     }
+
     if (cleared > 0) {
       this.emitStateChange();
     }
     return cleared;
   }
 
-  // Start automatic cleanup every 30 minutes
+  // Start automatic cleanup every 5 minutes - keeps last 100 entries
   startAutoCleanup() {
     setInterval(() => {
-      const cleared = this.clearCompletedJobs(30 * 60 * 1000); // Clear jobs older than 30 minutes
+      const cleared = this.pruneToMaxEntries();
       if (cleared > 0) {
-        console.log(`[JobManager] Auto-cleanup: cleared ${cleared} old jobs`);
+        console.log(`[JobManager] Auto-cleanup: pruned ${cleared} old jobs (keeping last ${this.MAX_ACTIVITY_ENTRIES})`);
       }
-    }, 30 * 60 * 1000); // Run every 30 minutes
+    }, 5 * 60 * 1000); // Run every 5 minutes
 
-    // Also clear any old jobs on startup (older than 1 hour)
-    const initialCleared = this.clearCompletedJobs(60 * 60 * 1000);
+    // Also prune on startup
+    const initialCleared = this.pruneToMaxEntries();
     if (initialCleared > 0) {
-      console.log(`[JobManager] Startup cleanup: cleared ${initialCleared} old jobs`);
+      console.log(`[JobManager] Startup cleanup: pruned ${initialCleared} old jobs (keeping last ${this.MAX_ACTIVITY_ENTRIES})`);
     }
   }
 

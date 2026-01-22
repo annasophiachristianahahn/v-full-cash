@@ -565,11 +565,18 @@ class AutoRunService extends EventEmitter {
 
   private async waitForAllReplies(): Promise<void> {
     return new Promise((resolve) => {
+      const startTime = Date.now();
+      const MAX_WAIT_MS = 30 * 60 * 1000; // 30 minute max wait
+
       const checkInterval = setInterval(() => {
         const completedOrFailed = this.state.progress.repliesSent + this.state.progress.repliesFailed;
         const total = this.state.replyJobIds.length;
+        const elapsed = Date.now() - startTime;
 
-        if (completedOrFailed >= total || this.isCancelled) {
+        if (completedOrFailed >= total || this.isCancelled || elapsed > MAX_WAIT_MS) {
+          if (elapsed > MAX_WAIT_MS) {
+            console.log(`[AutoRun] waitForAllReplies timed out after 30 minutes`);
+          }
           clearInterval(checkInterval);
           resolve();
         }
@@ -581,6 +588,7 @@ class AutoRunService extends EventEmitter {
     return new Promise((resolve) => {
       let completed = 0;
       const total = jobIds.length;
+      const startTime = Date.now();
       const processedJobIds = new Set<string>(); // Track which jobs we've already processed for cross-liking
 
       const checkInterval = setInterval(async () => {
@@ -588,11 +596,12 @@ class AutoRunService extends EventEmitter {
         completed = 0;
         for (const jobId of jobIds) {
           const job = jobManager.getJob(jobId);
-          if (job && (job.status === 'completed' || job.status === 'failed')) {
+          // Job is done if: completed, failed, OR missing (cleaned up)
+          if (!job || job.status === 'completed' || job.status === 'failed') {
             completed++;
 
-            // CROSS-LIKING: Process newly completed raid jobs
-            if (job.status === 'completed' && !processedJobIds.has(jobId) && job.result?.replyUrl) {
+            // CROSS-LIKING: Process newly completed raid jobs (only if job still exists)
+            if (job && job.status === 'completed' && !processedJobIds.has(jobId) && job.result?.replyUrl) {
               processedJobIds.add(jobId);
 
               const replyUrl = job.result.replyUrl;
@@ -623,7 +632,14 @@ class AutoRunService extends EventEmitter {
           }
         }
 
-        if (completed >= total || this.isCancelled) {
+        // Also add timeout protection
+        const elapsed = Date.now() - startTime;
+        const MAX_WAIT_MS = 30 * 60 * 1000; // 30 minute max wait
+
+        if (completed >= total || this.isCancelled || elapsed > MAX_WAIT_MS) {
+          if (elapsed > MAX_WAIT_MS) {
+            console.log(`[AutoRun] waitForRaidReplies timed out after 30 minutes`);
+          }
           clearInterval(checkInterval);
           resolve();
         }
