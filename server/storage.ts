@@ -1,4 +1,4 @@
-import { type TweetSearch, type InsertTweetSearch, type Tweet, type InsertTweet, type RecommendedCashtag, type InsertRecommendedCashtag, type PinnedTrendingToken, type InsertPinnedTrendingToken, type TwitterSettings, type InsertTwitterSettings, type AiConfig, type InsertAiConfig, type ReplyImage, type InsertReplyImage, type FilteredHandles, type InsertFilteredHandles, type ScheduledRun, type InsertScheduledRun, type OrganicActivity, type InsertOrganicActivity, type OrganicActivitySchedule, type InsertOrganicActivitySchedule, type FollowingCache, type InsertFollowingCache, tweetSearches, tweets, recommendedCashtags, pinnedTrendingTokens, twitterSettings, aiConfig, replyImages, filteredHandles, scheduledRuns, organicActivity, organicActivitySchedule, followingCache } from "@shared/schema";
+import { type TweetSearch, type InsertTweetSearch, type Tweet, type InsertTweet, type RecommendedCashtag, type InsertRecommendedCashtag, type PinnedTrendingToken, type InsertPinnedTrendingToken, type TwitterSettings, type InsertTwitterSettings, type AiConfig, type InsertAiConfig, type ReplyImage, type InsertReplyImage, type FilteredHandles, type InsertFilteredHandles, type ScheduledRun, type InsertScheduledRun, type OrganicActivity, type InsertOrganicActivity, type OrganicActivitySchedule, type InsertOrganicActivitySchedule, type FollowingCache, type InsertFollowingCache, tweetSearches, tweets, recommendedCashtags, pinnedTrendingTokens, twitterSettings, aiConfig, replyImages, filteredHandles, scheduledRuns, organicActivity, organicActivitySchedule, followingCache, appSettings } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { eq, sql } from "drizzle-orm";
 
@@ -81,6 +81,10 @@ export interface IStorage {
   shouldRefreshFollowingCache(username: string): Promise<boolean>;
   refreshFollowingCache(username: string, following: Array<{ userId: string; username: string; name: string }>): Promise<void>;
   getRandomFollowingUser(username: string): Promise<FollowingCache | undefined>;
+
+  // App settings
+  getAppSetting(key: string): Promise<string | null>;
+  setAppSetting(key: string, value: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -625,6 +629,46 @@ export class DatabaseStorage implements IStorage {
 
     const randomIndex = Math.floor(Math.random() * cached.length);
     return cached[randomIndex];
+  }
+
+  async getAppSetting(key: string): Promise<string | null> {
+    const db = await this.getDb();
+    try {
+      const [row] = await db.select().from(appSettings).where(eq(appSettings.key, key));
+      return row?.value ?? null;
+    } catch (error: any) {
+      // Table might not exist yet - create it
+      if (error.message?.includes('relation') || error.code === '42P01') {
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS "app_settings" ("key" text PRIMARY KEY, "value" text NOT NULL, "updated_at" timestamp NOT NULL DEFAULT now())`);
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async setAppSetting(key: string, value: string): Promise<void> {
+    const db = await this.getDb();
+    try {
+      await db.insert(appSettings)
+        .values({ key, value, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: appSettings.key,
+          set: { value, updatedAt: new Date() }
+        });
+    } catch (error: any) {
+      // Table might not exist yet - create it and retry
+      if (error.message?.includes('relation') || error.code === '42P01') {
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS "app_settings" ("key" text PRIMARY KEY, "value" text NOT NULL, "updated_at" timestamp NOT NULL DEFAULT now())`);
+        await db.insert(appSettings)
+          .values({ key, value, updatedAt: new Date() })
+          .onConflictDoUpdate({
+            target: appSettings.key,
+            set: { value, updatedAt: new Date() }
+          });
+      } else {
+        throw error;
+      }
+    }
   }
 }
 
@@ -1202,6 +1246,16 @@ export class MemStorage implements IStorage {
       lastRefreshed: f.lastRefreshed,
       createdAt: f.lastRefreshed
     };
+  }
+
+  private appSettingsMap = new Map<string, string>();
+
+  async getAppSetting(key: string): Promise<string | null> {
+    return this.appSettingsMap.get(key) ?? null;
+  }
+
+  async setAppSetting(key: string, value: string): Promise<void> {
+    this.appSettingsMap.set(key, value);
   }
 }
 

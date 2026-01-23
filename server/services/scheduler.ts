@@ -248,6 +248,10 @@ class SchedulerService {
       const primaryAccount = availableAccounts[Math.floor(Math.random() * availableAccounts.length)];
       const raidRounds = Math.floor(Math.random() * 3) + 2;
 
+      // Check global DM setting
+      const dmsEnabledValue = await storage.getAppSetting("dmsEnabled");
+      const dmsEnabled = dmsEnabledValue !== "false"; // Default true
+
       const config = {
         cashtags,
         pinnedCount: pinnedRecommended.length + pinnedTrending.length,
@@ -265,7 +269,7 @@ class SchedulerService {
         replyDelayRange: { min: 15, max: 30 },
         raidReplyDelayRange: { min: 20, max: 40 },
         dmDelayRange: { min: 7, max: 14 },
-        sendDm: true
+        sendDm: dmsEnabled
       };
 
       console.log(`🧪 [Test Trigger] Config: ${JSON.stringify(config, null, 2)}`);
@@ -370,6 +374,11 @@ class SchedulerService {
         - Primary Account: @${primaryAccount.username}
         - Raid Rounds: ${raidRounds}`);
 
+      // Check global DM setting
+      const dmsEnabledValue = await storage.getAppSetting("dmsEnabled");
+      const dmsEnabled = dmsEnabledValue !== "false"; // Default true
+      console.log(`📨 [Scheduler] DMs ${dmsEnabled ? 'enabled' : 'disabled'} for this run`);
+
       await autoRunService.start({
         searchParams: {
           minFollowers: 500,
@@ -385,7 +394,7 @@ class SchedulerService {
         replyDelayRange: { min: 15, max: 30 },
         raidReplyDelayRange: { min: 20, max: 40 },
         dmDelayRange: { min: 7, max: 14 },
-        sendDm: true,
+        sendDm: dmsEnabled,
         raidRounds
       });
 

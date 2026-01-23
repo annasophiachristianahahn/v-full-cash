@@ -21,9 +21,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { ProcessingStep, SearchResult } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Twitter, Sun, Moon, Settings, ChevronRight } from "lucide-react";
+import { Twitter, Sun, Moon, Settings, ChevronRight, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useTheme } from "@/components/theme-provider";
 import vajFaceGif from "/vaj-face.gif";
 
@@ -46,6 +47,22 @@ export default function Home() {
   const { data: usernames = [] } = useQuery<UsernameInfo[]>({
     queryKey: ["/api/twitter-usernames"],
     retry: false,
+  });
+
+  // DM enabled toggle
+  const { data: dmsEnabledData } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/settings/dms-enabled"],
+  });
+  const dmsEnabled = dmsEnabledData?.enabled ?? true;
+
+  const toggleDmsMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await apiRequest("POST", "/api/settings/dms-enabled", { enabled });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/dms-enabled"] });
+    },
   });
 
   useEffect(() => {
@@ -215,6 +232,23 @@ export default function Home() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
+        {/* Global DM Toggle */}
+        <div className="mb-4 flex items-center gap-3 px-1">
+          <Switch
+            checked={dmsEnabled}
+            onCheckedChange={(checked) => toggleDmsMutation.mutate(checked)}
+          />
+          <div className="flex items-center gap-2">
+            <MessageSquare className={`w-4 h-4 ${dmsEnabled ? 'text-blue-400' : 'text-muted-foreground'}`} />
+            <span className={`text-sm font-medium ${dmsEnabled ? 'text-foreground' : 'text-muted-foreground'}`}>
+              Enable DMs
+            </span>
+            {!dmsEnabled && (
+              <Badge variant="secondary" className="text-xs">OFF</Badge>
+            )}
+          </div>
+        </div>
+
         {/* Scheduler Panel - Schedule daily Auto Runs */}
         <SchedulerPanel />
 

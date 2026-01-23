@@ -32,6 +32,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   const dexScreenerService = new DexScreenerService();
 
+  // App settings endpoints
+  app.get("/api/settings/dms-enabled", async (req, res) => {
+    const storage = await getStorage();
+    const value = await storage.getAppSetting("dmsEnabled");
+    res.json({ enabled: value !== "false" }); // Default to true
+  });
+
+  app.post("/api/settings/dms-enabled", async (req, res) => {
+    const { enabled } = req.body;
+    const storage = await getStorage();
+    await storage.setAppSetting("dmsEnabled", String(!!enabled));
+    console.log(`[Settings] DMs ${enabled ? 'enabled' : 'disabled'}`);
+    res.json({ success: true, enabled: !!enabled });
+  });
+
   // SSE endpoint for real-time updates
   app.get("/api/events", (req, res) => {
     const clientId = randomUUID();
@@ -105,14 +120,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const {
         minTweetsPerRun = 22,
         maxTweetsPerRun = 44,
-        sendDm = true
       } = req.body;
+
+      // Always check global DM setting
+      const storage = await getStorage();
+      const dmsEnabledValue = await storage.getAppSetting("dmsEnabled");
+      const sendDm = dmsEnabledValue !== "false"; // Default true
 
       // Randomize maxTweets per run between min and max
       const maxTweets = Math.floor(Math.random() * (maxTweetsPerRun - minTweetsPerRun + 1)) + minTweetsPerRun;
 
-      const storage = await getStorage();
-      
       // Auto-fetch cashtags from pinned tokens (same as scheduler)
       const [recommendedCashtags, pinnedTrendingTokens, allTwitterSettings] = await Promise.all([
         storage.getRecommendedCashtags(),
@@ -260,7 +277,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Single Tweet Auto Run - runs full auto-run chain for a single tweet
   app.post("/api/single-auto-run", async (req, res) => {
     try {
-      const { tweetUrl, sendDm = true } = req.body;
+      const { tweetUrl } = req.body;
       
       if (!tweetUrl) {
         return res.status(400).json({ error: "tweetUrl is required" });
@@ -279,7 +296,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const storage = await getStorage();
       const allTwitterSettings = await storage.getAllTwitterSettings();
-      
+
+      // Check global DM setting
+      const dmsEnabledValue = await storage.getAppSetting("dmsEnabled");
+      const sendDm = dmsEnabledValue !== "false"; // Default true
+
       // Get available accounts for random selection
       const availableAccounts = allTwitterSettings.filter((s: { twitterCookie: string | null; isAvailableForRandom: boolean | null }) => 
         s.twitterCookie && (s.isAvailableForRandom !== false)
@@ -623,17 +644,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Queue a single reply
   app.post("/api/queue/reply", async (req, res) => {
     try {
-      const { 
-        tweetId, 
-        replyText, 
-        username, 
-        tweetUrl, 
-        mediaUrl, 
-        authorHandle, 
+      const {
+        tweetId,
+        replyText,
+        username,
+        tweetUrl,
+        mediaUrl,
+        authorHandle,
         delaySeconds = 0,
-        sendDm = true,
         dmDelaySeconds = 45
       } = req.body;
+
+      // Check global DM setting
+      const storage = await getStorage();
+      const dmsEnabledValue = await storage.getAppSetting("dmsEnabled");
+      const sendDm = dmsEnabledValue !== "false";
 
       if (!tweetId || !replyText || !username) {
         return res.status(400).json({ error: "tweetId, replyText, and username are required" });
@@ -661,9 +686,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Queue bulk replies
   app.post("/api/queue/bulk-replies", async (req, res) => {
     try {
+      // Check global DM setting
+      const storage = await getStorage();
+      const dmsEnabledValue = await storage.getAppSetting("dmsEnabled");
+      const globalDmsEnabled = dmsEnabledValue !== "false";
+
       const {
         replies,
-        sendDm = true,
+        sendDm = globalDmsEnabled,
         dmDelayRange = { min: 7, max: 14 },
         replyDelayRange = { min: 27, max: 47 }
       } = req.body;

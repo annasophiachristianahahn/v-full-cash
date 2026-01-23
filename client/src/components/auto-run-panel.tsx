@@ -3,7 +3,6 @@ import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -32,7 +31,6 @@ const defaultAutoRunState: AutoRunState = {
 
 export function AutoRunPanel({ selectedUsername }: AutoRunPanelProps) {
   const { toast } = useToast();
-  const [sendDm, setSendDm] = useState(true);
 
   // Load from localStorage or use defaults
   const [minTweetsPerRun, setMinTweetsPerRun] = useState(() => {
@@ -62,8 +60,7 @@ export function AutoRunPanel({ selectedUsername }: AutoRunPanelProps) {
     mutationFn: async () => {
       return await apiRequest("POST", "/api/auto-run/start", {
         minTweetsPerRun,
-        maxTweetsPerRun,
-        sendDm
+        maxTweetsPerRun
       });
     },
     onSuccess: (data: any) => {
@@ -209,15 +206,6 @@ export function AutoRunPanel({ selectedUsername }: AutoRunPanelProps) {
                   />
                 </div>
               </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="send-dm">Send DMs after replies</Label>
-              <Switch
-                id="send-dm"
-                checked={sendDm}
-                onCheckedChange={setSendDm}
-                data-testid="switch-send-dm"
-              />
             </div>
             <div className="text-sm text-muted-foreground">
               <p>Uses pinned cashtags (max 8) + random trending/suggested</p>

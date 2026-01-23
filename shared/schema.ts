@@ -245,6 +245,15 @@ export type OrganicActivity = typeof organicActivity.$inferSelect;
 export type InsertOrganicActivitySchedule = z.infer<typeof insertOrganicActivityScheduleSchema>;
 export type OrganicActivitySchedule = typeof organicActivitySchedule.$inferSelect;
 
+// App Settings - global persistent settings (e.g., DM enabled toggle)
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(), // Setting key (e.g., "dmsEnabled")
+  value: text("value").notNull(), // Setting value (stored as string, parsed as needed)
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+export type AppSetting = typeof appSettings.$inferSelect;
+
 // Following Cache - stores list of accounts each user follows (refreshed monthly)
 export const followingCache = pgTable("following_cache", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
